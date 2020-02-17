@@ -840,6 +840,13 @@ class SNAPS_assigner:
         valid_atoms = list(self.pars["atom_set"])
         extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
         
+        # A bit of a hack to avoid a an error
+        # ValueError: 'SS_name' is both an index level and a column label, which is ambiguous.
+        print(obs.index.name, obs.columns)
+        print(preds.index.name, preds.columns)
+        obs.index.name=None
+        
+        
         if not {"SS_name","Res_name"}.issubset(matching.columns):
             self.logger.warning("Cannot make assignment dataframe, as matching"
                                 +" dataframe does not have the correct columns")
@@ -1389,7 +1396,7 @@ class SNAPS_assigner:
                          (len(df.index), 
                           len(df["Res_N"].drop_duplicates()), 
                           filepath))
-        return(output_df)
+        return(output_df.to_csv(sep="\t"))
     
     def output_peaklists(self, filepath, format="sparky", 
                          spectra=["hsqc","hnco","hncaco","hncacb", "hncocacb"]):

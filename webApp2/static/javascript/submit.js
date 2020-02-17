@@ -20,7 +20,13 @@ $("#submit-button").click(function() {
     .then(function(jsonData) {
         if (jsonData.form_validated) {
             $("#downloads").append("<p>Downloads will be shown here</p>");
-            $("#plots").append("<p>Plots will be shown here</p>");
+
+            $("#plots").append("<div id='hsqc_plot'></div>");
+            Bokeh.embed.embed_item(jsonData.hsqc_plot, "hsqc_plot");
+
+            $("#plots").append("<div id='strip_plot'></div>");
+            Bokeh.embed.embed_item(jsonData.strip_plot, "strip_plot");
+
             $("#results-section").show();
         }
         else {

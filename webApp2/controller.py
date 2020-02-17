@@ -1,12 +1,13 @@
 # Flask web app for SNAPS
 
 from flask import Flask, render_template, jsonify, request
-#from SNAPS import SNAPS_compute
+from bokeh.embed import json_item
 import sys, os
 
-#main_SNAPS_file_path = os.path.dirname(os.path.realpath(__file__)) + '/../python'
-#sys.path.append(main_SNAPS_file_path)
-#os.chdir(main_SNAPS_file_path)
+# Need to add the SNAPS python directory to the path before importing
+main_SNAPS_file_path = os.path.dirname(os.path.realpath(__file__)) + '/../python'
+sys.path.append(main_SNAPS_file_path)
+from SNAPS import SNAPS_compute
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "test"
@@ -38,7 +39,18 @@ def submit():
     
     if form.validate():
         
-        return jsonify(form_validated=True, validation_errors=[])
+        results_tables, plots = SNAPS_compute(form.shift_file.data,
+                                              form.shift_type.data,
+                                              form.pred_file.data,
+                                              form.pred_type.data)
+        
+        hsqc_plot = json_item(plots["hsqc_plot"])
+        strip_plot = json_item(plots["strip_plot"])
+        
+        return jsonify(form_validated=True, validation_errors=[],
+                       main_results=results_tables["main_results"],
+                       shiftlist=results_tables["shiftlist"],
+                       hsqc_plot=hsqc_plot, strip_plot=strip_plot)
     else:
         validation_errors = []
         for field in form:

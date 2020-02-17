@@ -176,7 +176,7 @@ def runSNAPS(system_args):
 
     return(plots)
 
-def SNAPS_compute(shift_file, pred_file, run_pars, config):
+def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
     """Run SNAPS from webApp2"""
     from SNAPS_assigner import SNAPS_assigner
     from SNAPS_importer import SNAPS_importer
@@ -191,17 +191,15 @@ def SNAPS_compute(shift_file, pred_file, run_pars, config):
     # Import observed shifts
     importer = SNAPS_importer()
 
-    #if args.shift_type=="test":
-    importer.import_testset_shifts(shift_file)
+    if shift_type=="test":
+        importer.import_testset_shifts(shift_file)       
+    else:
+        importer.import_obs_shifts(shift_file, shift_type, SS_num=False)
         
-#    else:
-#        importer.import_obs_shifts(shift_file, args.shift_type, SS_num=False)
-        
-    a.obs = importer.obs
-
+    a.obs = importer.obs    
+    
     # Import predicted shifts
-    a.import_pred_shifts(pred_file, "shiftx2", 0)
-
+    a.import_pred_shifts(pred_file, pred_type, 0)
     
     #### Do the calculations
     a.prepare_obs_preds()
@@ -224,11 +222,11 @@ def SNAPS_compute(shift_file, pred_file, run_pars, config):
                        confidence_list=["High","Medium","Low","Unreliable","Undefined"])
     
     # Make the plots
-    hsqc_plot = a.plot_hsqc()
+    hsqc_plot = a.plot_hsqc(return_json=False)
         
-    strip_plot = a.plot_strips()
+    strip_plot = a.plot_strips(return_json=False)
         
-    return {"tables":[results_table, shiftlist], "plots":[hsqc_plot, strip_plot]}
+    return {"main_results":results_table, "shiftlist":shiftlist}, {"hsqc_plot":hsqc_plot, "strip_plot":strip_plot}
 
 #%% Run the actual script
 if __name__ == '__main__':
