@@ -21,16 +21,20 @@ $("#submit-button").click(function() {
         return response.json();
     })
     .then(function(jsonData) {
-        $(".loader").remove()
+        $(".loader").remove();
 
         if (jsonData.form_validated) {
-            $("#downloads").append("<p>Downloads will be shown here</p>");
+            // Add the download buttons
+            $("#downloads").append(downloadButton("Download results table", jsonData.main_results, "results.txt"));
+            $("#downloads").append(downloadButton("Download chemical shift list", jsonData.shiftlist, "shifts.txt"));
+            $("#downloads").append(downloadButton("Download HSQC plot", jsonData.hsqc_plot_html, "HSQC.html"));
+            $("#downloads").append(downloadButton("Download strip plot", jsonData.strip_plot_html, "strip plot.html"));
 
+            // Add the plots
             $("#plots").append("<div id='hsqc_plot'></div>");
-            Bokeh.embed.embed_item(jsonData.hsqc_plot, "hsqc_plot");
-
+            Bokeh.embed.embed_item(jsonData.hsqc_plot_json, "hsqc_plot");
             $("#plots").append("<div id='strip_plot'></div>");
-            Bokeh.embed.embed_item(jsonData.strip_plot, "strip_plot");
+            Bokeh.embed.embed_item(jsonData.strip_plot_json, "strip_plot");
 
             $("#results-section").show();
         }
@@ -41,6 +45,24 @@ $("#submit-button").click(function() {
             });
             $("#error-section").show();
         }
+    })
+    .catch(function(error) {
+        $(".loader").remove();
+
+        console.log(error);
+        $("#error-messages").append("<p>"+error+"</p>");
+        $("#error-section").show();
     });
 
 });
+
+function downloadButton(buttonName, downloadFile, defaultFilename) {
+    // Create a download button and an event handler for when it's clicked
+    btn = document.createElement("button");
+    $(btn).text(buttonName);
+    $(btn).click(function() {
+        let file = new Blob([downloadFile], { type: "application / octet - stream" });
+        saveAs(file, defaultFilename);
+    });
+    return btn;
+};

@@ -2,6 +2,7 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='javascript/jquery-3.4.1.min.js') }}"></script>
+<script src="{{ url_for('static', filename='javascript/FileSaver.min.js') }}"></script>
 <script src="https://cdn.bokeh.org/bokeh/release/bokeh-1.4.0.min.js"></script>
 <script src="{{ url_for('static', filename='javascript/submit.js') }}"></script>
 {% endblock %}
@@ -40,7 +41,9 @@
 </div>
 
 <div id="results-section" hidden>
+    <h2>Results</h2>
     <div id="downloads"></div>
+    <h3>Plots</h3>
     <div id="plots"></div>
 </div>
 {% endblock %}
