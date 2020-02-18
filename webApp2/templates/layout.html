@@ -22,19 +22,14 @@
             <a href="../howto" class="nav-link nav-item active">How to use</a>
         </div>
     </nav>
-    <div >
+    <main id="content">
+        {% block content %}
+        {% endblock %}
+    </main>
 
-        <div id="content">
-            {% block content %}
-            {% endblock %}
-        </div>
-
-        <footer>
-            <div>
-                For testing and demonstration only. Code available at <a href="https://github.com/aheyam/SNAPS">https://github.com/aheyam/SNAPS</a>
-            </div>
-        </footer>
-    </div>
+    <footer>
+        For testing and demonstration only. Code available at <a href="https://github.com/aheyam/SNAPS">https://github.com/aheyam/SNAPS</a>
+    </footer>
 </body>
 
 {% block scripts %}{% endblock %}
