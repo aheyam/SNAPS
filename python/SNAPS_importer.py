@@ -36,12 +36,12 @@ class SNAPS_importer:
         """
         # Import from file
         if filetype=="ccpn":
-            hsqc = pd.read_table(filename) 
+            hsqc = pd.read_csv(filename, sep="\t") 
             hsqc = hsqc[["Assign F1","Position F1","Position F2", "Height"]]
             hsqc.columns = ["SS_name","H","N","Height"]      
             #hsqc.index = hsqc["SS_name"]
         elif filetype=="sparky":
-            hsqc = pd.read_table(filename, sep="\s+")
+            hsqc = pd.read_csv(filename, sep="\s+")
             hsqc.columns = ["SS_name","H","N","Height"]
             # If assigned, Name has format "A123HN-A123N"
             # If unassigned, Name column contains "?-?"
@@ -55,7 +55,7 @@ class SNAPS_importer:
                     pd.Series(range(N_unassigned)).astype(str))
             
         elif filetype=="xeasy":
-            hsqc = pd.read_table(filename, sep="\s+", comment="#", header=None,
+            hsqc = pd.read_csv(filename, sep="\s+", comment="#", header=None,
                                  usecols=[0,1,2,5], 
                                  names=["SS_name","H","N","Height"])
             hsqc["SS_name"] = "x" + hsqc["SS_name"].astype(str)
@@ -67,7 +67,7 @@ class SNAPS_importer:
                         colnames_line = num
                         colnames = line.split()[1:]
             
-            hsqc = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+            hsqc = pd.read_csv(filename, sep="\s+", skiprows=colnames_line+1,
                                 names=colnames)
             hsqc = hsqc[["INDEX", "ASS", "X_PPM", "Y_PPM", "HEIGHT"]]
             hsqc.columns = ["ID", "SS_name", "H", "N", "Height"]
@@ -107,20 +107,20 @@ class SNAPS_importer:
             do not seem to contain assignment information.
         """
         if filetype == "ccpn":
-            peaks = pd.read_table(filename,
+            peaks = pd.read_csv(filename, sep="\t",
                                   usecols=["Position F1","Position F2",
                                            "Position F3","Assign F1",
                                            "Assign F2","Assign F3",
                                            "Height"])
             peaks.columns = ["F1","F2","F3","A1","A2","A3","Height"]
         elif filetype == "sparky":
-            peaks = pd.read_table(filename, sep="\s+")
+            peaks = pd.read_csv(filename, sep="\s+")
             peaks.columns=["Name","F1","F2","F3","Height"]
             peaks["A1"], peaks["A2"], peaks["A3"] = list(zip(
                                                 *peaks["Name"].str.split("-")))
             #return(peaks)
         elif filetype == "xeasy":
-            peaks = pd.read_table(filename, sep="\s+", comment="#", header=None,
+            peaks = pd.read_csv(filename, sep="\s+", comment="#", header=None,
                                  usecols=[1,2,3,6], 
                                  names=["F1","F2","F3","Height"])
             peaks["SS_name"] = None
@@ -132,7 +132,7 @@ class SNAPS_importer:
                         colnames_line = num
                         colnames = line.split()[1:]
                         
-            peaks = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1,
+            peaks = pd.read_csv(filename, sep="\s+", skiprows=colnames_line+1,
                                 names=colnames)
             peaks = peaks[["ASS", "X_PPM", "Y_PPM", "Z_PPM", "HEIGHT"]]
             peaks.columns = ["SS_name", "F1", "F2", "F3", "Height"]
@@ -321,19 +321,19 @@ class SNAPS_importer:
         """
         # Import from file
         if filetype=="snaps":
-            obs = pd.read_table(filename)
+            obs = pd.read_csv(filename, sep="\t")
         elif filetype=="ccpn":
-            obs = pd.read_table(filename)
+            obs = pd.read_csv(filename, sep="\t")
             obs = obs.loc[:,["Residue", "Assign Name", "Shift"]]
             obs.columns = ["SS_name", "Atom_type", "Shift"]
             obs["Atom_type"] = obs["Atom_type"].str.upper()
         elif filetype=="sparky":
-            obs = pd.read_table(filename, sep="\s+")
+            obs = pd.read_csv(filename, sep="\s+")
             obs = obs.loc[:,["Group", "Atom", "Shift"]]
             obs.columns = ["SS_name", "Atom_type", "Shift"]
             obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
         elif filetype=="xeasy":
-            obs = pd.read_table(filename, sep="\s+", 
+            obs = pd.read_csv(filename, sep="\s+", 
                                 header=None, na_values="999.000",
                                 names=["i","Shift","SD","Atom_type","SS_name"])
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
@@ -347,13 +347,13 @@ class SNAPS_importer:
                     if line.find("VARS")>-1:
                         colnames_line = num
             
-            obs = pd.read_table(filename, sep="\s+", skiprows=colnames_line+1, 
+            obs = pd.read_csv(filename, sep="\s+", skiprows=colnames_line+1, 
                                 names=["SS_name","Res_type","Atom_type","Shift"])
             obs = obs.loc[:, ["SS_name", "Atom_type", "Shift"]]
             obs["SS_name"] = obs["SS_name"].astype(str)
             obs.loc[obs["Atom_type"]=="HN", "Atom_type"] = "H"
         elif filetype=="mars":
-            obs_wide = pd.read_table(filename, sep="\s+", na_values="-")
+            obs_wide = pd.read_csv(filename, sep="\s+", na_values="-")
             obs_wide = obs_wide.rename(columns={"CO":"C","CO-1":"C_m1",
                                                 "CA-1":"CA_m1","CB-1":"CB_m1"})
             obs_wide = obs_wide.drop(columns="HA-1")
@@ -377,6 +377,7 @@ class SNAPS_importer:
         # Convert from long to wide
         obs = obs.pivot(index="SS_name", columns="Atom_type", values="Shift")
         obs.insert(0, "SS_name", obs.index.values)
+        obs.index.name = None
         
         # Extract residue number from SS_name (if present), and get m1 shifts
         if SS_num:
@@ -419,7 +420,7 @@ class SNAPS_importer:
             return(None)
         
         # Import file
-        df = pd.read_table(filename, sep="\s+", comment="#", 
+        df = pd.read_csv(filename, sep="\s+", comment="#", 
                                     header=None, names=["SS_name","AA","Type"])
         
         # For rows with Type=="in", the SS_class is the same as AA
@@ -467,7 +468,7 @@ class SNAPS_importer:
         
         """
         #### Import the observed chemical shifts
-        obs_long = pd.read_table(filename)
+        obs_long = pd.read_csv(filename, sep="\t")
         obs_long = obs_long[["Residue_PDB_seq_code","Residue_label",
                              "Atom_name","Chem_shift_value"]]
         obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]

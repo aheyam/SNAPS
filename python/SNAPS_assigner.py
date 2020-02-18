@@ -208,7 +208,7 @@ class SNAPS_assigner:
                         colnames = line.split()[1:]
                         break
                         
-            preds_long = pd.read_table(filename, sep="\s+", names=colnames,
+            preds_long = pd.read_csv(filename, sep="\s+", names=colnames,
                                        skiprows=colnames_line+1)
             preds_long = preds_long.reindex(columns=["RESID","RESNAME",
                                                      "ATOMNAME","SHIFT"])
@@ -842,9 +842,7 @@ class SNAPS_assigner:
         
         # A bit of a hack to avoid a an error
         # ValueError: 'SS_name' is both an index level and a column label, which is ambiguous.
-        print(obs.index.name, obs.columns)
-        print(preds.index.name, preds.columns)
-        obs.index.name=None
+        #obs.index.name=None
         
         
         if not {"SS_name","Res_name"}.issubset(matching.columns):
@@ -926,7 +924,8 @@ class SNAPS_assigner:
         matching.index = matching["Res_name"]
         matching.index.name = None
         
-        tmp = pd.concat([matching, self.preds[["Res_name_m1","Res_name_p1"]]], axis=1)
+        tmp = pd.concat([matching, self.preds[["Res_name_m1","Res_name_p1"]]], 
+                        axis=1, sort=True)
         
         # Add a SS_name_m1 and SS_name_p1 columns
         tmp = tmp.merge(matching[["SS_name"]], how="left", left_on="Res_name_m1", 
@@ -1332,7 +1331,7 @@ class SNAPS_assigner:
                         "C":"13C", "CA":"13C", "CB":"13C"}
             df["Nuc"] = [nuc_dict[a] for a in df["Atom"]]
             
-            output_df = df[["Group","Atom","Nuc","Shift"]]
+            output_df = df[["Group","Atom","Nuc","Shift"]].copy()
             output_df["Sdev"] = 0.0
             output_df["Assignments"] = int(1)
             
@@ -1344,7 +1343,7 @@ class SNAPS_assigner:
         elif format=="xeasy":
             df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
             
-            output_df = df[["Shift","Atom_type","Res_N"]]
+            output_df = df[["Shift","Atom_type","Res_N"]].copy()
             output_df.insert(1, "Sdev", 0)
             
             output_df["Shift"] = output_df["Shift"].fillna(999.0)
@@ -1357,7 +1356,7 @@ class SNAPS_assigner:
         elif format=="nmrpipe":
             df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
             
-            output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
+            output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]].copy()
             
             output_df["Shift"] = output_df["Shift"].fillna(9999.0)
             output_df = output_df.dropna()
@@ -1455,7 +1454,7 @@ class SNAPS_assigner:
             for k in colourmap.keys():
                 tmp = ColumnDataSource(df[df["Confidence"]==k])
                 plt.vbar(x="Res_name", top=1, width=1, 
-                         color=colourmap[k], legend=k, source=tmp)
+                         color=colourmap[k], legend_label=k, source=tmp)
             
             # Set legend properties
             plt.legend.orientation = "horizontal"
@@ -1601,7 +1600,7 @@ class SNAPS_assigner:
         # Plot the peaks
         for k in colourmap.keys():
             tmp = assign_df[assign_df["Confidence"]==k]
-            plt.circle(tmp["H"], tmp["N"], color=colourmap[k], legend=k)
+            plt.circle(tmp["H"], tmp["N"], color=colourmap[k], legend_label=k)
         
         # Label the points
         df = ColumnDataSource(assign_df)
