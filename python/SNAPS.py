@@ -180,9 +180,23 @@ def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
     """Run SNAPS from webApp2"""
     from SNAPS_assigner import SNAPS_assigner
     from SNAPS_importer import SNAPS_importer
-    #import logging
+    import logging
     
     # Set up logging
+    web_logger = logging.getLogger("SNAPS")
+    web_logger.setLevel(logging.DEBUG)
+    # Create a log handler that writes to a specific file.
+    # In principle you could have multiple handlers, but here I just have one.
+    # Need to explicitly define a handler so it can be explicitly closed 
+    # once the analysis is complete.
+    log_handler = logging.FileHandler("logs/webApp.log", mode='a')
+    log_handler.setLevel(logging.DEBUG)
+    log_handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(message)s", 
+            datefmt="%Y-%m-%d %H:%M:%S"))
+    web_logger.addHandler(log_handler)
+    
+    web_logger.info("**** STARTING NEW SNAPS RUN ****")
     
     #### Prepare the input data
     a = SNAPS_assigner()
@@ -197,6 +211,8 @@ def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
         importer.import_obs_shifts(shift_file, shift_type, SS_num=False)
         
     a.obs = importer.obs    
+    web_logger.info("Finished reading in %d spin systems from %s", 
+                 len(a.obs["SS_name"]), shift_file)
     
     # Import predicted shifts
     a.import_pred_shifts(pred_file, pred_type, 0)
@@ -225,6 +241,11 @@ def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
     hsqc_plot = a.plot_hsqc(return_json=False)
         
     strip_plot = a.plot_strips(return_json=False)
+    
+    # Close the log file
+    web_logger.info("SNAPS run complete.")
+    web_logger.handlers[0].close()
+    web_logger.removeHandler(web_logger.handlers[0])
         
     return {"main_results":results_table, "shiftlist":shiftlist}, {"hsqc_plot":hsqc_plot, "strip_plot":strip_plot}
 
