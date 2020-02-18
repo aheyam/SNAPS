@@ -840,11 +840,6 @@ class SNAPS_assigner:
         valid_atoms = list(self.pars["atom_set"])
         extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
         
-        # A bit of a hack to avoid a an error
-        # ValueError: 'SS_name' is both an index level and a column label, which is ambiguous.
-        #obs.index.name=None
-        
-        
         if not {"SS_name","Res_name"}.issubset(matching.columns):
             self.logger.warning("Cannot make assignment dataframe, as matching"
                                 +" dataframe does not have the correct columns")

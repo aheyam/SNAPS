@@ -8,6 +8,9 @@ $("#submit-button").click(function() {
     $("#downloads").empty();
     $("#plots").empty();
 
+    // Display a loading symbol
+    $("#input-section").after("<div class='loader'></div>")
+
     // POST the form contents
     let request = {
         method: "POST",
@@ -18,6 +21,8 @@ $("#submit-button").click(function() {
         return response.json();
     })
     .then(function(jsonData) {
+        $(".loader").remove()
+
         if (jsonData.form_validated) {
             $("#downloads").append("<p>Downloads will be shown here</p>");
 
