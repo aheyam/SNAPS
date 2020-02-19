@@ -15,7 +15,7 @@ from Bio import SeqIO
 # This allows logging messages to be registered, but they won't be written 
 # anywhere until a handler is defined elsewhere
 import logging
-logger = logging.getLogger(__name__).addHandler(logging.NullHandler())
+#logger = logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 #%% Import functions
 
@@ -230,14 +230,14 @@ def import_sequence(filename):
     # Check res_N_list and seq_list are the same length, and correct if not
     if len(res_N_list) > len(seq_list):
         res_N_list = res_N_list[0:len(seq_list)]
-        logger.warning("The residue range provided is longer than the"+
-                            " length of the sequence, so has been truncated")
+#        logger.warning("The residue range provided is longer than the"+
+#                            " length of the sequence, so has been truncated")
     elif len(res_N_list) < len(seq_list):
         extra_needed = len(seq_list) - len(res_N_list)
         last_N = res_N_list[-1]
         res_N_list += list(range(last_N, last_N + extra_needed))
-        logger.warning("The residue range provided is shorter than the"+
-                            " length of the sequence, so has been extended")
+#        logger.warning("The residue range provided is shorter than the"+
+#                            " length of the sequence, so has been extended")
     
     # Make a dataframe
     seq_df = pd.DataFrame({"Res_N":res_N_list,"Res_type":seq_list})
@@ -248,8 +248,8 @@ def import_sequence(filename):
     seq_df.index = seq_df["Res_name"]
     seq_df.index.name = None
     
-    logger.info("Finished importing a sequence of length %d" % 
-                     len(seq_df.index))
+#    logger.info("Finished importing a sequence of length %d" % 
+#                     len(seq_df.index))
     
     return(seq_df)
     
@@ -269,10 +269,10 @@ def import_pred_shifts(filename, filetype, offset=0):
     if filetype == "shiftx2":
         preds_long = pd.read_csv(filename)
         if any(preds_long.columns == "CHAIN"):
-            if len(preds_long["CHAIN"].unique())>1:
-                logger.warning(
-                        """Chain identifier dropped - if multiple chains are 
-                        present in the predictions, they will be merged.""")
+#            if len(preds_long["CHAIN"].unique())>1:
+#                logger.warning(
+#                        """Chain identifier dropped - if multiple chains are 
+#                        present in the predictions, they will be merged.""")
             preds_long = preds_long.drop("CHAIN", axis=1)     
         preds_long = preds_long.reindex(columns=["NUM","RES","ATOMNAME",
                                                  "SHIFT"])  
@@ -295,12 +295,12 @@ def import_pred_shifts(filename, filetype, offset=0):
         # Sparta+ uses HN for backbone amide proton - convert to H
         preds_long.loc[preds_long["Atom_type"]=="HN", "Atom_type"] = "H"
     else:
-        logger.error("""Invalid predicted shift type: '%s'. Allowed 
-                          options are 'shiftx2' or 'sparta+'""" % (filetype))
+#        logger.error("""Invalid predicted shift type: '%s'. Allowed 
+#                          options are 'shiftx2' or 'sparta+'""" % (filetype))
         return(None)
     
-    logger.info("Imported %d predicted chemical shifts from %s" 
-                     % (len(preds_long.index), filename))
+#    logger.info("Imported %d predicted chemical shifts from %s" 
+#                     % (len(preds_long.index), filename))
     
     #### Initial processing and conversion from long to wide
     # Add sequence number offset and create residue names
@@ -322,71 +322,7 @@ def import_pred_shifts(filename, filetype, offset=0):
     tmp.index.name = None
     preds = pd.concat([tmp, preds], axis=1)
     
-    #### Make consistent with seq_df (and create if it doesn't already exist)
-    # TODO: This section should probably merge into prepare_obs_preds()
-    # If seq_df is missing, create it based on preds
-    seq_df = self.seq_df
-    
-    if seq_df is None:
-        seq_df = preds.copy()[["Res_N","Res_type","Res_name"]]
-        
-        # If there are any missing residue numbers, create them
-        min_N = seq_df["Res_N"].min()
-        max_N = seq_df["Res_N"].max()
-        missing_residue_numbers = (set(range(min_N, max_N+1)).
-                                   difference(seq_df["Res_N"]))
-        if len(missing_residue_numbers)>0:
-            tmp = pd.DataFrame({"Res_N":list(missing_residue_numbers),
-                                "Res_type":"X","Res_name":np.NaN})
-            tmp["Res_name"] = tmp["Res_N"].astype(str) + tmp["Res_type"]
-            tmp["Res_name"] = tmp["Res_name"].str.rjust(5)
-            tmp.index = tmp["Res_N"]
-            tmp.index.name = None
-            seq_df = seq_df.append(tmp).sort_index()
-            
-    # Add/delete residues from preds so it matches seq_df
-    # Only keep predictions that are in seq_df
-    tmp = len(preds.index)
-    preds = preds[preds["Res_N"].isin(seq_df["Res_N"])]
-    tmp2 = tmp - len(preds.index)
-    if tmp2>0:
-        self.logger.info(("Predictions for %d residues were discarded "
-                            "because they were not present in the imported "
-                            "sequence file") % tmp2)
-        
-    # Add predictions for any residue number that is in seq_df but not preds
-    tmp = pd.DataFrame(data=seq_df[~seq_df["Res_N"].isin(preds["Res_N"])],columns=preds.columns)
-    preds = preds.append(tmp)
-    if len(tmp.index)>0:
-        self.logger.info(("%d residues from the sequence were missing "
-                            "from the predictions") % len(tmp.index))
-    
-    # If Res_name is inconsistent between seq_df and preds, make a compromise
-    preds.index = preds["Res_N"]
-    preds = preds.sort_index()
-    seq_df.index = seq_df["Res_N"]
-    seq_df = seq_df.sort_index()
-    mask = preds["Res_name"] != seq_df["Res_name"]
-    
-    if any(mask):
-        ambiguous_res_names = (seq_df.loc[mask, "Res_name"] + "(" +
-                               preds.loc[mask, "Res_type"] + "?)")
-        preds.loc[mask, "Res_name"] = ambiguous_res_names
-        seq_df.loc[mask, "Res_name"] = ambiguous_res_names
-        # Note we don't update the Res_type in preds, because this is potentially 
-        # used for correcting the chemical shift
-        self.logger.warning(
-                ("There were inconsistencies between the provided sequence "
-                "file and the predicted shifts. The following residues had "
-                "inconsistent amino acid types: %s") % 
-                ", ".join(ambiguous_res_names))
-    
-#        preds.index = preds["Res_name"]
-#        preds.index.name = None
-    seq_df.index = seq_df["Res_name"]
-    seq_df.index.name = None
-    
-    self.seq_df = seq_df.copy()
+
     
     #### Add the chemical shift info back in
     
@@ -415,8 +351,8 @@ def import_pred_shifts(filename, filetype, offset=0):
                    "Res_name_p1","Res_type_m1"]+
                   list(atom_set.intersection(preds.columns))]
     
-    logger.info("Finished reading in %d predicted residues from %s"
-                     % (len(preds.index), filename))
+#    logger.info("Finished reading in %d predicted residues from %s"
+#                     % (len(preds.index), filename))
     
     return(preds)
     
@@ -497,8 +433,8 @@ def output_shiftlist(assign_df, filepath=None, format="sparky", all_preds=None,
     # Limit confidence levels and discard unneeded columns and rows
     atoms = {"H","N","HA","C","CA","CB"}.intersection(assign_df.columns)
     df_wide = assign_df.loc[assign_df["Confidence"].isin(confidence_list),:]
-    logger.info("Chemical shift export: restricted confidence levels to %s" 
-                     % ", ".join(confidence_list))
+#    logger.info("Chemical shift export: restricted confidence levels to %s" 
+#                     % ", ".join(confidence_list))
     df_wide.loc[~(df_wide["Dummy_res"] | df_wide["Dummy_SS"]),
                 ["Res_N","Res_type"]+list(atoms)]
     #TODO: This discards all i-1 information, even though that may be useful 
@@ -508,7 +444,7 @@ def output_shiftlist(assign_df, filepath=None, format="sparky", all_preds=None,
     # Check in case no shifts were selected
     if df_wide.empty:   
         print("No chemical shifts selected for export.")
-        logger.warning("Cannot export chemical shifts: No atom types selected")
+#        logger.warning("Cannot export chemical shifts: No atom types selected")
         # Create an empty file
         df_wide.to_csv(filepath, sep="\t", float_format="%.3f",
                        index=True, header=False)
@@ -569,8 +505,8 @@ def output_shiftlist(assign_df, filepath=None, format="sparky", all_preds=None,
         tmp = tmp.merge(all_preds[["Res_N","Res_type"]], how="left", on="Res_N")
         tmp["Res_type"] = tmp["Res_type"].fillna("X")
         seq = tmp["Res_type"].sum()     # Convert to a string
-        logger.info("Sequence contains %d residues, of which %d have unknown type"
-                         % (len(seq), sum(tmp["Res_type"]=="X")))
+#        logger.info("Sequence contains %d residues, of which %d have unknown type"
+#                         % (len(seq), sum(tmp["Res_type"]=="X")))
         
         if filepath is not None:
             f = open(filepath, 'w+')
@@ -588,12 +524,12 @@ def output_shiftlist(assign_df, filepath=None, format="sparky", all_preds=None,
             f.close()
             
     else:
-        logger.warning("Cannot export chemical shifts: "+
-                            "format string '%s' not recognised." % format)
+#        logger.warning("Cannot export chemical shifts: "+
+#                            "format string '%s' not recognised." % format)
         return(None)
         
-    logger.info("Wrote %d chemical shifts from %d residues to %s" %
-                     (len(df.index), 
-                      len(df["Res_N"].drop_duplicates()), 
-                      filepath))
+#    logger.info("Wrote %d chemical shifts from %d residues to %s" %
+#                     (len(df.index), 
+#                      len(df["Res_N"].drop_duplicates()), 
+#                      filepath))
     return(output_df.to_csv(sep="\t"))

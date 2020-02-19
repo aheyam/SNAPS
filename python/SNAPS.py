@@ -6,6 +6,8 @@ Main SNAPS script for assigning an observed shift list based on predicted shifts
 @author: aph516
 """
 
+import SNAPS_io
+
 def get_arguments(system_args):
     import argparse
     
@@ -203,19 +205,16 @@ def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
     a.read_config_file("../config/config_yaml.txt")
     
     # Import observed shifts
-    importer = SNAPS_importer()
-
     if shift_type=="test":
-        importer.import_testset_shifts(shift_file)       
+        a.obs = SNAPS_io.import_testset_shifts(shift_file)       
     else:
-        importer.import_obs_shifts(shift_file, shift_type, SS_num=False)
-        
-    a.obs = importer.obs    
+        a.obs = SNAPS_io.import_obs_shifts(shift_file, shift_type, SS_num=False)
+           
     web_logger.info("Finished reading in %d spin systems from %s", 
                  len(a.obs["SS_name"]), shift_file)
     
     # Import predicted shifts
-    a.import_pred_shifts(pred_file, pred_type, 0)
+    a.preds = SNAPS_io.import_pred_shifts(pred_file, pred_type, 0)
     
     #### Do the calculations
     a.prepare_obs_preds()
@@ -232,10 +231,14 @@ def SNAPS_compute(shift_file, shift_type, pred_file, pred_type):
     # Get the main results table
     results_table = a.assign_df.to_csv(None, sep="\t", float_format="%.3f", 
                            index=False)
+    print(a.preds, '\n', a.assign_df.loc)
     
     # Get the assigned chemical shift list
-    shiftlist = a.output_shiftlist(None, "sparky", 
-                       confidence_list=["High","Medium","Low","Unreliable","Undefined"])
+    shiftlist = SNAPS_io.output_shiftlist(a.assign_df, filepath=None, 
+                                          format="sparky", all_preds=a.all_preds,
+                                          confidence_list=["High","Medium",
+                                                           "Low","Unreliable",
+                                                           "Undefined"])
     
     # Make the plots
     hsqc_plot = a.plot_hsqc(return_json=False)

@@ -411,15 +411,84 @@ class SNAPS_assigner:
         """Perform preprocessing on the observed and predicted shifts to prepare 
         them for calculation of the log probability matrix.
         
-        1) Remove proline residues from predictions
-        2) Discard atom types that are not used or aren't present in both
-        3) Add dummy rows to obs or preds to bring them to the same length
+        1) Make a seq_df data frame if necessary, and make consistent with preds
+        2) Remove proline residues from predictions
+        3) Discard atom types that are not used or aren't present in both
+        4) Add dummy rows to obs or preds to bring them to the same length
         
         Returns the modified obs and preds DataFrames.
         """
         
         obs = self.obs.copy()
         preds = self.preds.copy()
+        
+        #### Make consistent with seq_df (and create if it doesn't already exist)
+        # If seq_df is missing, create it based on preds
+        seq_df = self.seq_df
+        
+        if seq_df is None:
+            seq_df = preds.copy()[["Res_N","Res_type","Res_name"]]
+            
+            # If there are any missing residue numbers, create them
+            min_N = seq_df["Res_N"].min()
+            max_N = seq_df["Res_N"].max()
+            missing_residue_numbers = (set(range(min_N, max_N+1)).
+                                       difference(seq_df["Res_N"]))
+            if len(missing_residue_numbers)>0:
+                tmp = pd.DataFrame({"Res_N":list(missing_residue_numbers),
+                                    "Res_type":"X","Res_name":np.NaN})
+                tmp["Res_name"] = tmp["Res_N"].astype(str) + tmp["Res_type"]
+                tmp["Res_name"] = tmp["Res_name"].str.rjust(5)
+                tmp.index = tmp["Res_name"]
+                tmp.index.name = None
+                #print(seq_df, "\n", tmp)
+                seq_df = seq_df.append(tmp).sort_index()
+                
+        # Add/delete residues from preds so it matches seq_df
+        # Only keep predictions that are in seq_df
+        tmp = len(preds.index)
+        preds = preds[preds["Res_N"].isin(seq_df["Res_N"])]
+        tmp2 = tmp - len(preds.index)
+        if tmp2>0:
+            self.logger.info(("Predictions for %d residues were discarded "
+                                "because they were not present in the imported "
+                                "sequence file") % tmp2)
+            
+        # Add predictions for any residue number that is in seq_df but not preds
+        tmp = pd.DataFrame(data=seq_df[~seq_df["Res_N"].isin(preds["Res_N"])],columns=preds.columns)
+        preds = preds.append(tmp)
+        if len(tmp.index)>0:
+            self.logger.info(("%d residues from the sequence were missing "
+                                "from the predictions") % len(tmp.index))
+        
+        # If Res_name is inconsistent between seq_df and preds, make a compromise
+        preds.index = preds["Res_N"]
+        preds = preds.sort_index()
+        seq_df.index = seq_df["Res_N"]
+        seq_df = seq_df.sort_index()
+        mask = preds["Res_name"] != seq_df["Res_name"]
+        
+        if any(mask):
+            ambiguous_res_names = (seq_df.loc[mask, "Res_name"] + "(" +
+                                   preds.loc[mask, "Res_type"] + "?)")
+            preds.loc[mask, "Res_name"] = ambiguous_res_names
+            seq_df.loc[mask, "Res_name"] = ambiguous_res_names
+            # Note we don't update the Res_type in preds, because this is potentially 
+            # used for correcting the chemical shift
+            self.logger.warning(
+                    ("There were inconsistencies between the provided sequence "
+                    "file and the predicted shifts. The following residues had "
+                    "inconsistent amino acid types: %s") % 
+                    ", ".join(ambiguous_res_names))
+        
+    #        preds.index = preds["Res_name"]
+    #        preds.index.name = None
+        seq_df.index = seq_df["Res_name"]
+        seq_df.index.name = None
+        
+        self.seq_df = seq_df.copy()
+        
+        #print(self.preds)
         
         #### Delete any prolines in preds
         self.all_preds = preds.copy()   # Keep a copy of all predictions

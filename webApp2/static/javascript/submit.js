@@ -25,6 +25,7 @@ $("#submit-button").click(function() {
 
         if (jsonData.form_validated) {
             // Add the download buttons
+            // todo: there should be a check that these files exist first
             $("#downloads").append(downloadButton("Download results table", jsonData.main_results, "results.txt"));
             $("#downloads").append(downloadButton("Download chemical shift list", jsonData.shiftlist, "shifts.txt"));
             $("#downloads").append(downloadButton("Download HSQC plot", jsonData.hsqc_plot_html, "HSQC.html"));
