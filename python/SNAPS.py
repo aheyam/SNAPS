@@ -1,10 +1,15 @@
-#!/anaconda3/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Main SNAPS script for assigning an observed shift list based on predicted shifts
 
 @author: aph516
 """
+from tabulate import tabulate
+
+from SNAPS_importer import SNAPS_importer
+from SNAPS_assigner import SNAPS_assigner
+import logging
 
 import pdb
 
@@ -25,8 +30,8 @@ def get_arguments(system_args):
     # Information on input files and configuration options
     parser.add_argument("--shift_type",
                         choices=["snaps", "ccpn", "sparky", "mars",
-                                 "xeasy", "nmrpipe", "test"],
-                        default="snaps",
+                                 "xeasy", "nmrpipe", "nef", "test"],
+                        default="snaps", 
                         help="The format of the observed shift file.")
     parser.add_argument("--pred_type",
                         choices=["shiftx2", "sparta+"],
@@ -54,7 +59,7 @@ def get_arguments(system_args):
     parser.add_argument("--shift_output_file", default=None,
                         help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("--shift_output_type", default="sparky",
-                        choices=["sparky","xeasy","nmrpipe"],
+                        choices=["sparky", "xeasy", "nmrpipe"],
                         help="One or more output formats for chemical shift export")
     parser.add_argument("--shift_output_confidence", nargs="*",
                         choices=["High","Medium","Low","Unreliable","Undefined"],
@@ -83,9 +88,6 @@ def get_arguments(system_args):
     return(args)
 
 def runSNAPS(system_args):
-    from SNAPS_importer import SNAPS_importer
-    from SNAPS_assigner import SNAPS_assigner
-    import logging
 
     #### Command line arguments
     args = get_arguments(system_args)
@@ -153,9 +155,20 @@ def runSNAPS(system_args):
         # breakpoint()
 
     #### Output the results
-    a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
-                           index=False)
+    headings = '''
+        Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
+         C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
+    '''.split()
+    table = []
+    for df_index, df_row in a.assign_df.iterrows():
+        table_row = []
+        table.append(table_row)
+        for heading in headings:
+            table_row.append(df_row[heading])
 
+    with open(args.output_file, 'w') as fp:
+        print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
+    
     logger.info("Finished writing results to %s", args.output_file)
 
     #### Write chemical shift lists
