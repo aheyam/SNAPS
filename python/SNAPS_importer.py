@@ -217,7 +217,7 @@ class SNAPS_importer:
         obs.index.name = None
         for spec in self.peaklists.keys():
             peaks = self.peaklists[spec]
-            for ss in obs["SS_name"]:
+            for ss in obs.loc[:, "SS_name"]:
                 if ss in peaks["SS_name"].values:
                     ss_peaks = peaks.loc[peaks["SS_name"]==ss,:]
                     if spec=="hnco":
@@ -249,7 +249,7 @@ class SNAPS_importer:
                             else:
                                 obs.loc[ss, "CB_m1"] = ss_peaks["C"].item()
                         else:
-                            ss_peaks["Abs_height"] = ss_peaks["Height"].abs()
+                            ss_peaks.loc[:,"Abs_height"] = ss_peaks["Height"].abs()
                             # Above line throws a SettingWithCopy warning, 
                             # but I can't seem to fix it
                             
@@ -282,7 +282,7 @@ class SNAPS_importer:
                             else:
                                 obs.loc[ss, "CB"] = ss_peaks["C"].item()
                         else:
-                            ss_peaks["Abs_height"] = ss_peaks["Height"].abs()
+                            ss_peaks.loc[:,"Abs_height"] = ss_peaks["Height"].abs()
                             # Above line throws a SettingWithCopy warning, 
                             # but I can't seem to fix it
                             ss_peaks = ss_peaks.sort_values(by="Abs_height",
@@ -314,7 +314,7 @@ class SNAPS_importer:
         
         filename: Path to text file containing chemical shifts.
         filetype: Allowed values are "snaps", "ccpn", "sparky", "xeasy", 
-            "nmrpipe" or "mars"
+            "nmrpipe", "mars" or "nef"
             The "ccpn" option is for importing a Resonance table exported from 
             Analysis v2.x. The "snaps" option is for importing an unassigned 
             shift table previously exported from SNAPS
