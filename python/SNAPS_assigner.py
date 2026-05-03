@@ -129,6 +129,9 @@ class SNAPS_assigner:
             self.logger.error("Some required parameters were missing/not imported: %s",
                                 ", ".join(missing_pars))
 
+        # Find the full paths for parameter files (eg d_mean.csv)
+        # In the YAML file, only the file name is given, so find the parent folder 
+        # of the config file and add it
         par_dir = Path(filename).parent
 
         for par_name, par in self.pars.items():
@@ -288,7 +291,7 @@ class SNAPS_assigner:
                                        difference(seq_df["Res_N"]))
             if len(missing_residue_numbers)>0:
                 tmp = pd.DataFrame({"Res_N":list(missing_residue_numbers),
-                                    "Res_type":"X","Res_name":np.NaN})
+                                    "Res_type":"X","Res_name":np.nan})
                 tmp["Res_name"] = tmp["Res_N"].astype(str) + tmp["Res_type"]
                 tmp["Res_name"] = tmp["Res_name"].str.rjust(5)
                 tmp.index = tmp["Res_N"]
@@ -459,8 +462,8 @@ class SNAPS_assigner:
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
 
         # Remove references to deleted residues from Res_name_m1/p1
-        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.NaN
-        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.NaN
+        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.nan
+        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.nan
 
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
@@ -487,7 +490,7 @@ class SNAPS_assigner:
         M = len(preds.index)
 
         if N>M:     # If there are more spin systems than predictions
-            dummies = pd.DataFrame(np.NaN, columns = preds.columns,
+            dummies = pd.DataFrame(np.nan, columns = preds.columns,
                         index=["DR_"+str(i) for i in 1+np.arange(N-M)])
             dummies["Res_name"] = dummies.index
             dummies["Dummy_res"] = True
@@ -495,7 +498,7 @@ class SNAPS_assigner:
             preds = pd.concat([preds, dummies])
             self.logger.info("Added %d dummy predicted residues" % len(dummies.index))
         elif M>N:
-            dummies = pd.DataFrame(np.NaN, columns = obs.columns,
+            dummies = pd.DataFrame(np.nan, columns = obs.columns,
                         index=["DSS_"+str(i) for i in 1+np.arange(M-N)])
             dummies["SS_name"] = dummies.index
             dummies["Dummy_SS"] = True
@@ -752,9 +755,8 @@ class SNAPS_assigner:
                 consistent_links_atom = (abs(mismatch_atom) < threshold)
 
                 # Make a note of NA positions, and set them to default value
-                na_mask = np.isnan(mismatch_atom)
-                mismatch_atom[na_mask] = 0
-                consistent_links_atom[na_mask] = 0
+                mismatch_atom.fillna(0.0)
+                consistent_links_atom.fillna(0.0)
 
                 # Update mismatch and consistent links matrixes
                 mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
@@ -981,8 +983,8 @@ class SNAPS_assigner:
                                 tmp_m1["SS_name_m1"], tmp_m1["SS_name"])), index=tmp_m1.index)
         tmp["Num_good_links_p1"] = pd.Series(list(df_lookup(self.consistent_links_matrix,
                                 tmp_p1["SS_name"], tmp_p1["SS_name_p1"])), index=tmp_p1.index)
-        tmp["Num_good_links_m1"].fillna(0, inplace=True)
-        tmp["Num_good_links_p1"].fillna(0, inplace=True)
+        tmp["Num_good_links_m1"] = tmp["Num_good_links_m1"].fillna(0)
+        tmp["Num_good_links_p1"] = tmp["Num_good_links_p1"].fillna(0)
         tmp["Num_good_links"] = tmp["Num_good_links_m1"] + tmp["Num_good_links_p1"]
 
         # Add an assignment confidence column
@@ -1041,8 +1043,8 @@ class SNAPS_assigner:
             self.logger.info("Finished checking assignment consistency")
         else:
             # You can't do a comparison without sequential atoms
-            assign_df["Max_mismatch_m1"] = np.NaN
-            assign_df["Max_mismatch_p1"] = np.NaN
+            assign_df["Max_mismatch_m1"] = np.nan
+            assign_df["Max_mismatch_p1"] = np.nan
             assign_df["Num_good_links_m1"] = 0
             assign_df["Num_good_links_p1"] = 0
             assign_df["Confidence"] = "Undefined"
@@ -1542,7 +1544,7 @@ class SNAPS_assigner:
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_z" in name is to ensure it sorts after the atom+"_m1" shifts
                 # eg. CA, CA_m1, CA_z
-                vlines[atom+"_z"] = np.NaN
+                vlines[atom+"_z"] = np.nan
                 # Convert from wide to long
                 vlines = vlines.melt(id_vars=["Res_name"],
                                      value_vars=[atom, atom+"_m1", atom+"_z"],
@@ -1558,7 +1560,7 @@ class SNAPS_assigner:
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_a" in name ensures it sorts between the atom and atom+"_m1" shifts
                 # eg. CA, CA_a, CA_m1
-                hlines[atom+"_a"] = np.NaN
+                hlines[atom+"_a"] = np.nan
                 # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"],
                                      value_vars=[atom, atom+"_m1", atom+"_a"],
