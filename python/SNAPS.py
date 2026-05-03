@@ -155,20 +155,23 @@ def runSNAPS(system_args):
         # breakpoint()
 
     #### Output the results
-    headings = '''
-        Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
-         C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
-    '''.split()
-    table = []
-    for df_index, df_row in a.assign_df.iterrows():
-        table_row = []
-        table.append(table_row)
-        for heading in headings:
-            table_row.append(df_row[heading])
-
-    with open(args.output_file, 'w') as fp:
-        print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
     
+    # Tabulate doesn't account for if some atom types are missing.
+    # headings = '''
+    #     Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
+    #      C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
+    # '''.split()
+    # table = []
+    # for df_index, df_row in a.assign_df.iterrows():
+    #     table_row = []
+    #     table.append(table_row)
+    #     for heading in headings:
+    #         table_row.append(df_row[heading])
+
+    # with open(args.output_file, 'w') as fp:
+    #     print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
+    a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
+                           index=False)
     logger.info("Finished writing results to %s", args.output_file)
 
     #### Write chemical shift lists
