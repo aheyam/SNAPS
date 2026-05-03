@@ -1,4 +1,4 @@
-#!/anaconda3/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Script to test SNAPS functionality
@@ -118,7 +118,7 @@ if "basic" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_yaml_2.txt",
+            cmd = make_cmd(i, out_dir, "test/config_basic.yaml",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
 
@@ -233,9 +233,15 @@ if "basic" in args.test or "all" in args.test:
         # Make a matrix showing how often each residue type is misassigned to a different type
         misassigned_types_basic = assigns_basic[["SS_type","Res_type"]].groupby(["SS_type","Res_type"]).size().unstack().fillna(0)
         type_count = misassigned_types_basic.sum(axis=1)    # Count occurrences of each residue type in observations
-        np.fill_diagonal(misassigned_types_basic.values, 0) # Set diagonal to zero
+
+        # Set diagonal to zero
+        for aa in misassigned_types_basic.index:
+            if aa in misassigned_types_basic.columns:
+                misassigned_types_basic.loc[aa, aa] = 0.0 
+
         # Calculate % of each type that gets misassigned to each other type
         misassigned_types2_basic = (misassigned_types_basic/type_count)*100
+        misassigned_types2_basic.to_csv(path/"output/aa_type_misassignment.csv")
 
         tmp = assigns_basic[assigns_basic["Dummy_SS"]==False].groupby("Res_type")["Correct"]
         tmp.sum()/tmp.count()
@@ -250,10 +256,10 @@ if "basic" in args.test or "all" in args.test:
 
         # Check if there's any pattern in the log_probabilities
         tmp = assigns_basic[(assigns_basic["ID"]=="A006") &
-                          ~assigns_basic["Dummy_SS"] &
-                          ~assigns_basic["Dummy_res"]]
+                            ~assigns_basic["Dummy_SS"] &
+                            ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_density(aes(x="Log_prob", colour="Correct"))
-        + xlim(-100, 0) )
+        + xlim(-100, 0) ).save(path/"plots/basic_log_probability.pdf")
 
         tmp = assigns_basic[~assigns_basic["Dummy_SS"] &
                             ~assigns_basic["Dummy_res"]]
@@ -268,7 +274,7 @@ if "pred_correction" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_pred_correction.txt")
+            cmd = make_cmd(i, out_dir, "test/config_pred_correction.yaml")
             run(cmd)
 
     if args.analyse:
@@ -286,7 +292,7 @@ if "delta_correlation" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_delta_corr.txt")
+            cmd = make_cmd(i, out_dir, "test/config_delta_corr.yaml")
             run(cmd)
 
     if args.analyse:
@@ -303,7 +309,7 @@ if "delta_correlation2" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_delta_corr2.txt")
+            cmd = make_cmd(i, out_dir, "test/config_delta_corr2.yaml")
             run(cmd)
 
     if args.analyse:
@@ -321,7 +327,7 @@ if "hadamac" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_hadamac.txt",
+            cmd = make_cmd(i, out_dir, "test/config_hadamac.yaml",
                            ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
@@ -354,7 +360,7 @@ if "hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_hnco.txt",
+            cmd = make_cmd(i, out_dir, "test/config_hnco.yaml",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:
@@ -371,7 +377,7 @@ if "hnco_hadamac" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_hnco_hadamac.txt",
+            cmd = make_cmd(i, out_dir, "test/config_hnco_hadamac.yaml",
                            ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
     if args.analyse:
@@ -388,7 +394,7 @@ if "hnco_hnca" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_hnco_hnca.txt",
+            cmd = make_cmd(i, out_dir, "test/config_hnco_hnca.yaml",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:
@@ -405,7 +411,7 @@ if "no_CB" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_no_CB.txt",
+            cmd = make_cmd(i, out_dir, "test/config_no_CB.yaml",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:
@@ -422,7 +428,7 @@ if "no_CO" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config_no_CO.txt",
+            cmd = make_cmd(i, out_dir, "test/config_no_CO.yaml",
                            ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
             run(cmd)
     if args.analyse:
@@ -487,7 +493,7 @@ if "alt_assign" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_assign.txt")
+            cmd = make_cmd(i, out_dir, "test/config_alt_assign.yaml")
             run(cmd)
 
     if args.analyse:
@@ -506,7 +512,7 @@ if "alt_hadamac" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_hadamac.txt",
+            cmd = make_cmd(i, out_dir, "test/config_alt_hadamac.yaml",
                            ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
@@ -528,7 +534,7 @@ if "alt_hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_hnco.txt",
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco.yaml",
                            ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
@@ -548,7 +554,7 @@ if "alt_hnco2" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_hnco2.txt",
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco2.yaml",
                            ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
@@ -569,7 +575,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_hnco_hncacb.txt")
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hncacb.yaml")
             run(cmd)
 
     if args.analyse:
@@ -589,7 +595,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "config_alt_ca_co.txt")
+            cmd = make_cmd(i, out_dir, "test/config_alt_ca_co.yaml")
             run(cmd)
 
     if args.analyse:
@@ -609,7 +615,7 @@ if "iterated" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config.txt", ["--iterated"])
+            cmd = make_cmd(i, out_dir, "test/config_basic.yaml", ["--iterated"])
             run(cmd)
 
     if args.analyse:
@@ -659,7 +665,7 @@ if "consistent" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "config.txt", ["--consistent"])
+            cmd = make_cmd(i, out_dir, "test/config_consistent.yaml")
             run(cmd)
 
     if args.analyse:

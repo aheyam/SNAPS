@@ -668,28 +668,28 @@ class SNAPS_assigner:
                                                 # each Res/SS pair
             log_prob_matrix = log_prob_matrix + log10(default_prob) * na_matrix
 
-#        if self.pars["use_ss_class_info"]:
-#            # For each type of residue type information that's available, make a
-#            # matrix showing the probability modifications due to type mismatch,
-#            # then add it to log_prob_matrix
-#            # Maybe make SS_class mismatch a parameter in config file?
-#            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
-#                #print(ss_class)
-#                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index,
-#                                           columns=log_prob_matrix.columns)
-#
-#                # For each amino acid type in turn:
-#                for res in preds["Res_type"].dropna().unique():
-#                    # Work out which observations could be that aa type
-#                    allowed = obs[ss_class].str.contains(res).fillna(True)
-#                    # Select the predictions which are that aa type
-#                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
-#                    # For the selected predictions, penalise any observations
-#                    # where the current aa type is not allowed
-#                    for p in pred_list:
-#                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
-#
-#                log_prob_matrix = log_prob_matrix + SS_class_matrix
+        if self.pars["use_SS_class_info"]:
+            # For each type of residue type information that's available, make a
+            # matrix showing the probability modifications due to type mismatch,
+            # then add it to log_prob_matrix
+            # Maybe make SS_class mismatch a parameter in config file?
+            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
+                #print(ss_class)
+                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index,
+                                            columns=log_prob_matrix.columns)
+
+                # For each amino acid type in turn:
+                for res in preds["Res_type"].dropna().unique():
+                    # Work out which observations could be that aa type
+                    allowed = obs[ss_class].str.contains(res).fillna(True)
+                    # Select the predictions which are that aa type
+                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
+                    # For the selected predictions, penalise any observations
+                    # where the current aa type is not allowed
+                    for p in pred_list:
+                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
+
+                log_prob_matrix = log_prob_matrix + SS_class_matrix
 
         # Sort out NAs and dummy residues/spin systems
         log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
@@ -894,10 +894,8 @@ class SNAPS_assigner:
                              preds.loc[:, preds.columns.isin(
                                      valid_atoms+["Res_name"])],
                              on="Res_name", suffixes=("","_pred"), how="left")
-
-        # assign_df["Log_prob"] = log_prob_matrix.lookup(
-        #                                     assign_df["SS_name"],
-        #                                     assign_df["Res_name"])
+        
+        assign_df.index = assign_df.SS_name     # Needed to match Log_prob to correct row.
         assign_df["Log_prob"] = df_lookup(log_prob_matrix,
                                           assign_df["SS_name"],
                                           assign_df["Res_name"])
