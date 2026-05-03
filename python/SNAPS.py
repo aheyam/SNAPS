@@ -84,7 +84,9 @@ def get_arguments(system_args):
                                   "--shift_type","snaps",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",
-                                  "-l","output/test.log"))
+                                  "-l","output/test.log",
+                                  "--strip_plot_file", "output/strip_plot.htm",
+                                  "--hsqc_plot_file", "output/hsqc_plot.htm"))
     return(args)
 
 def runSNAPS(system_args):
