@@ -279,8 +279,11 @@ if "pred_correction" in args.test or "all" in args.test:
             run(cmd)
 
     if args.analyse:
-        assigns_pc, summary_pc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_pc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        # assigns_pc, summary_pc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        # summary_pc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+
+        assigns_pc = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_pc = summarise_results(assigns_pc)
 
         save_summary_plot(assigns_pc, summary_pc, out_dir)
 
@@ -297,8 +300,11 @@ if "delta_correlation" in args.test or "all" in args.test:
             run(cmd)
 
     if args.analyse:
-        assigns_dc, summary_dc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_dc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        # assigns_dc, summary_dc = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        # summary_dc.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+
+        assigns_dc = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_dc = summarise_results(assigns_dc)
 
         save_summary_plot(assigns_dc, summary_dc, out_dir)
 
@@ -314,8 +320,11 @@ if "delta_correlation2" in args.test or "all" in args.test:
             run(cmd)
 
     if args.analyse:
-        assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_dc2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+        # assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        # summary_dc2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+
+        assigns_dc2 = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        summary_dc2 = summarise_results(assigns_dc2)
 
         save_summary_plot(assigns_dc2, summary_dc2, out_dir)
 
@@ -348,7 +357,10 @@ if "hadamac" in args.test or "all" in args.test:
         # Make a matrix showing how often each residue type is misassigned to a different type
         misassigned_types_hadamac = assigns_hadamac[["SS_type","Res_type"]].groupby(["SS_type","Res_type"]).size().unstack().fillna(0)
         type_count_hadamac = misassigned_types_hadamac.sum(axis=1)    # Count occurrences of each residue type in observations
-        np.fill_diagonal(misassigned_types_hadamac.values, 0) # Set diagonal to zero
+        # Set diagonal to zero
+        for aa in misassigned_types_hadamac.index:
+            if aa in misassigned_types_hadamac.columns:
+                misassigned_types_hadamac.loc[aa, aa] = 0.0 
         # Calculate % of each type that gets misassigned to each other type
         misassigned_types2_hadamac = (misassigned_types_hadamac/type_count_hadamac)*100
 

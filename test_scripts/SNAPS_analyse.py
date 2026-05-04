@@ -35,7 +35,7 @@ def check_assignment_accuracy(data_dir, testset_df, ID_list,
     assigns = None
     for i in ID_list:
         tmp_all = pd.read_csv(
-                data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"),
+                data_dir/(prefix+testset_df.loc[i, "out_name"]+"_alt.txt"),
                 sep="\t", index_col=False)
         tmp_all["ID"] = i
 
@@ -151,7 +151,6 @@ def check_assignment_accuracy(data_dir, testset_df, ID_list,
 
     summary["Pc_correct"] = (summary["Correctly assigned"]+
                              summary["Correctly unassigned"]) / summary["N_SS"]
-
     return([assigns, summary])
 
 def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_file=None):

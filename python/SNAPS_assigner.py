@@ -796,7 +796,6 @@ class SNAPS_assigner:
             conflicts = inc[row_name].duplicated(keep=False) | inc[col_name].duplicated(keep=False)
             if any(conflicts):
                 self.logger.warning("Warning: entries in inc conflict with one another - dropping conflicts")
-                #print(inc[conflicts])
                 inc = inc[~conflicts]
 
             if exc is not None:
@@ -805,7 +804,6 @@ class SNAPS_assigner:
                 exc_in_inc = exc[row_name].isin(inc[row_name]) | exc[col_name].isin(inc[col_name])
                 if any(exc_in_inc):
                     self.logger.warning("Some values in exc are also found in inc, so are redundant.")
-                    #print(exc[exc_in_inc])
                     exc = exc.loc[~exc_in_inc, :]
 
             # Removed fixed assignments from probability matrix and obs, preds
@@ -835,10 +833,10 @@ class SNAPS_assigner:
             for i, r in exc.iterrows():     # iterates over (index, row as pd.Series) tuples
                 # If one side of an exclude pair is a dummy row or column,
                 # exclude *all* dummy rows and columns
-                if r[row_name] in dummy_rows:
+                if r[col_name] in dummy_cols:
                     score_matrix_reduced.loc[r[row_name],
                                              dummy_cols] = penalty
-                elif r[col_name] in dummy_cols:
+                elif r[row_name] in dummy_rows:
                     score_matrix_reduced.loc[dummy_rows,
                                              r[col_name]] = penalty
                 else:
@@ -1111,24 +1109,23 @@ class SNAPS_assigner:
                 # Add the alt match for this ss or res to the results dataframe
                 # and also the excluded dataframe.
                 if by_ss:
-                    # alt_matching_all = alt_matching_all.append(
-                    #         alt_matching.loc[alt_matching["SS_name"]==ss, :],
-                    #         ignore_index=True)
-                    alt_matching_all = pd.concat([alt_matching_all, alt_matching.loc[alt_matching["SS_name"]==ss, :]], ignore_index=True)
+                    alt_matching_all = pd.concat([alt_matching_all, 
+                                                  alt_matching.loc[alt_matching["SS_name"]==ss, :]], 
+                                                  ignore_index=True)
                     res = alt_matching.loc[alt_matching["SS_name"]==ss,
                                            "Res_name"].tolist()[0]
                     # The .tolist()[0] is to convert a single-item series into a string.
                 else:
-                    # alt_matching_all = alt_matching_all.append(
-                    #         alt_matching.loc[alt_matching["Res_name"]==res, :],
-                    #         ignore_index=True)
-                    alt_matching_all = pd.concat([alt_matching_all, alt_matching.loc[alt_matching["Res_name"]==res, :]], ignore_index=True)
+                    alt_matching_all = pd.concat([alt_matching_all, 
+                                                  alt_matching.loc[alt_matching["Res_name"]==res, :]], 
+                                                  ignore_index=True)
 
                     ss = alt_matching.loc[alt_matching["Res_name"]==res,
                                           "SS_name"].tolist()[0]
                 # excluded = excluded.append(pd.DataFrame({"SS_name":[ss],"Res_name":[res]}),
                 #                            ignore_index=True)
-                excluded = pd.concat([excluded, pd.DataFrame({"SS_name":[ss],"Res_name":[res]})], ignore_index=True)
+                excluded = pd.concat([excluded, pd.DataFrame({"SS_name":[ss],"Res_name":[res]})], 
+                                     ignore_index=True)
 
         self.alt_assign_df = self.make_assign_df(alt_matching_all)
         
