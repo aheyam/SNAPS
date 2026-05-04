@@ -4,12 +4,6 @@
 atom_set: # Which atom types to include. Don't change indentation.
     - H
     - N
-    - HA
-    - CA
-    - CB
-    - C
-    - CA_m1
-    - CB_m1
     - C_m1
 atom_sd: # Atom standard deviations. Don't change indentation.
     H: 0.454
@@ -33,4 +27,4 @@ delta_correlation_cov_corrected_file:      dd_cov.csv        # File containing c
 
 #May want to add more parameters to control generation of alternative assignments
 alt_assignments: 2       # Number of alternative assignments to generate
-use_SS_class_info:  False   # Whether to use information on amino acid type, if available
+use_SS_class_info:  True   # Whether to use information on amino acid type, if available

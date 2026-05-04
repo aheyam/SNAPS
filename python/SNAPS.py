@@ -55,7 +55,6 @@ def get_arguments(system_args):
     # Options controlling output files
     parser.add_argument("-l", "--log_file", default=None,
                         help="A file logging information will be written to.")
-
     parser.add_argument("--shift_output_file", default=None,
                         help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("--shift_output_type", default="sparky",
@@ -66,7 +65,9 @@ def get_arguments(system_args):
                         default=["High","Medium","Low","Unreliable","Undefined"],
                         help="""Limits the shiftlist output to assignments with
                         particular confidence levels. More than one level is allowed""")
-
+    parser.add_argument("--alt_assignments_output_file", default=None,
+                        help="""A file alternative assignments will be written to 
+                        (only if alt_assignments is set to >0 in config file)""")
     parser.add_argument("--strip_plot_file",
                         default=None,
                         help="A filename for an output strip plot.")
@@ -120,6 +121,7 @@ def runSNAPS(system_args):
 
     # Import config file
     a.read_config_file(args.config_file)
+    # breakpoint()
 
 
     # Import observed and predicted shifts
@@ -152,9 +154,12 @@ def runSNAPS(system_args):
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
         a.assign_from_preds(set_assign_df=True)
-        # breakpoint()
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
-        # breakpoint()
+        if (a.pars["alt_assignments"] > 0):
+            if args.alt_assignments_output_file is not None:
+                a.find_alt_assignments(N=a.pars["alt_assignments"])
+            else:
+                logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
     #### Output the results
     
@@ -175,6 +180,11 @@ def runSNAPS(system_args):
     a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
                            index=False)
     logger.info("Finished writing results to %s", args.output_file)
+
+    if (a.pars["alt_assignments"] > 0) and args.alt_assignments_output_file is not None:
+        a.alt_assign_df.to_csv(args.alt_assignments_output_file, sep="\t", float_format="%.3f",
+                                index=False)
+        logger.info("Finished writing alternative assignment results to %s", args.alt_assignments_output_file)
 
     #### Write chemical shift lists
     if args.shift_output_file is not None:

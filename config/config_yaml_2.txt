@@ -32,4 +32,5 @@ delta_correlation_mean_corrected_file:     dd_mean.csv       # File containing m
 delta_correlation_cov_corrected_file:      dd_cov.csv        # File containing covariances between the prediction errors, assuming the predictions have been corrected
 
 #May want to add more parameters to control generation of alternative assignments
-#alt_assignments: 0       # Number of alternative assignments to generate
+alt_assignments: 0       # Number of alternative assignments to generate
+use_SS_class_info:  False   # Whether to use information on amino acid type, if available

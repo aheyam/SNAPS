@@ -4,12 +4,9 @@
 atom_set: # Which atom types to include. Don't change indentation.
     - H
     - N
-    - HA
     - CA
-    - CB
     - C
     - CA_m1
-    - CB_m1
     - C_m1
 atom_sd: # Atom standard deviations. Don't change indentation.
     H: 0.454

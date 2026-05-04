@@ -675,19 +675,19 @@ class SNAPS_assigner:
             # Maybe make SS_class mismatch a parameter in config file?
             for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
                 #print(ss_class)
-                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index,
-                                            columns=log_prob_matrix.columns)
+                SS_class_matrix = pd.DataFrame(0.0, index=log_prob_matrix.index,
+                                                columns=log_prob_matrix.columns)
 
                 # For each amino acid type in turn:
                 for res in preds["Res_type"].dropna().unique():
                     # Work out which observations could be that aa type
                     allowed = obs[ss_class].str.contains(res).fillna(True)
                     # Select the predictions which are that aa type
-                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
+                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"].to_list()
                     # For the selected predictions, penalise any observations
                     # where the current aa type is not allowed
                     for p in pred_list:
-                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
+                        SS_class_matrix.loc[:,p] = (1 - allowed.astype(float))*-2 #log10(0.01)
 
                 log_prob_matrix = log_prob_matrix + SS_class_matrix
 
@@ -789,7 +789,7 @@ class SNAPS_assigner:
         row_name = score_matrix.index.name
         col_name = score_matrix.columns.name
 
-        self.logger.info("Started linear assignment")
+        self.logger.debug("Started linear assignment")
 
         if inc is not None:
             # Check for conflicting entries in inc
@@ -812,7 +812,7 @@ class SNAPS_assigner:
             # dataframes. Latter is needed if inc includes any dummy SS/res,
             # and to detect if the reduced data is entirely dummies
             score_matrix_reduced = score_matrix.drop(index=inc[row_name]).drop(columns=inc[col_name])
-            self.logger.info("%d assignments were fixed, %d remain to be assigned"
+            self.logger.debug("%d assignments were fixed, %d remain to be assigned"
                              % (len(inc), len(score_matrix_reduced.index)))
         else:
             score_matrix_reduced = score_matrix
@@ -831,7 +831,7 @@ class SNAPS_assigner:
                 penalty = -2*score_matrix.abs().max().max()
             else:
                 penalty = 2*score_matrix.abs().max().max()
-
+            
             for i, r in exc.iterrows():     # iterates over (index, row as pd.Series) tuples
                 # If one side of an exclude pair is a dummy row or column,
                 # exclude *all* dummy rows and columns
@@ -844,7 +844,7 @@ class SNAPS_assigner:
                 else:
                     score_matrix_reduced.loc[r["SS_name"], r["Res_name"]] = penalty
 
-            self.logger.info("Penalised %d excluded row,column pairs" % len(exc.index))
+            self.logger.debug("Penalised %d excluded row,column pairs" % len(exc.index))
 
         if maximise:
             row_ind, col_ind = linear_sum_assignment(-1*score_matrix_reduced)
@@ -896,6 +896,7 @@ class SNAPS_assigner:
                              on="Res_name", suffixes=("","_pred"), how="left")
         
         assign_df.index = assign_df.SS_name     # Needed to match Log_prob to correct row.
+        assign_df.index.names = ["index"]
         assign_df["Log_prob"] = df_lookup(log_prob_matrix,
                                           assign_df["SS_name"],
                                           assign_df["Res_name"])
@@ -1058,10 +1059,10 @@ class SNAPS_assigner:
         """ Find the next-best assignment(s) for each residue or spin system
 
         This works by setting the log probability to a very high value for each
-        residue in turn, and rerunning the assignment
+        residue in turn, and rerunning the assignment. Assumes that the best assignment
+        has already been found, and is stored in self.assign_df.
 
         Arguments:
-        best_match_indexes: [row_ind, col_ind] output from find_best_assignment()
         N: number of alternative assignments to generate
         by_ss: if true, calculate next best assignment for each spin system.
             Otherwise, calculate it for each residue.
@@ -1076,6 +1077,8 @@ class SNAPS_assigner:
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
         alt_matching = None
+        dummy_rows = self.obs.loc[self.obs.Dummy_SS, "SS_name"]
+        dummy_cols = self.preds.loc[self.preds.Dummy_res, "Res_name"]
 
         # Calculate sum probability for the best matching
         best_sum_prob = self.calc_overall_matching_prob(best_matching)
@@ -1098,7 +1101,8 @@ class SNAPS_assigner:
             excluded = best_matching.loc[[i], :]
 
             for j in range(N):
-                alt_matching = self.find_best_assignments(exc=excluded)
+                alt_matching = self.find_best_assignment(self.log_prob_matrix, exc=excluded, 
+                                                         dummy_rows=dummy_rows, dummy_cols=dummy_cols)
 
                 alt_matching["Rank"] = j+2
                 alt_sum_prob = self.calc_overall_matching_prob(alt_matching)
@@ -1127,6 +1131,7 @@ class SNAPS_assigner:
                 excluded = pd.concat([excluded, pd.DataFrame({"SS_name":[ss],"Res_name":[res]})], ignore_index=True)
 
         self.alt_assign_df = self.make_assign_df(alt_matching_all)
+        
         if by_ss:
             self.alt_assign_df = self.alt_assign_df.sort_values(
                                                 by=["SS_name", "Rank"])
@@ -1159,7 +1164,7 @@ class SNAPS_assigner:
         Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
 
         # Initial best matching (subject to initial constraints)
-        best_matching = self.find_best_assignments(inc=init_inc, exc=init_exc)
+        best_matching = self.find_best_assignment(inc=init_inc, exc=init_exc)
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
 
@@ -1210,12 +1215,12 @@ class SNAPS_assigner:
                 if inc_i.shape[0]==0:
                     inc_i = None
 
-                matching_i = self.find_best_assignments(inc=inc_i, exc=exc_i,
+                matching_i = self.find_best_assignment(inc=inc_i, exc=exc_i,
                                                      return_none_if_all_dummy=True,
                                                      verbose=False)
                 if matching_i is None:
                     # If the non-constrained residues or spin systems are all
-                    # dummies, find_best_assignments will return None, and this
+                    # dummies, find_best_assignment will return None, and this
                     # node can be discarded
                     pass
                 else:

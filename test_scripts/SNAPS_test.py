@@ -97,6 +97,7 @@ def save_alt_summary_plots(assigns, summary, out_dir):
 
 def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
     """Extra_args is a list of additional command line arguments"""
+    print(out_dir, ":", id)
     cmd = [args.python_cmd, (path/"python/SNAPS.py").as_posix(),
             testset_df.loc[id, "obs_file"].as_posix(),
             testset_df.loc[id, "preds_file"].as_posix(),
@@ -493,7 +494,9 @@ if "alt_assign" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_assign.yaml")
+            cmd = make_cmd(i, out_dir, "test/config_alt_assign.yaml", 
+                           ["--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -513,7 +516,9 @@ if "alt_hadamac" in args.test or "all" in args.test:
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
             cmd = make_cmd(i, out_dir, "test/config_alt_hadamac.yaml",
-                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML", 
+                            "--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -534,8 +539,8 @@ if "alt_hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_hnco.yaml",
-                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco.yaml", ["--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -547,15 +552,17 @@ if "alt_hnco" in args.test or "all" in args.test:
 
         save_alt_summary_plots(assigns_alt_hnco, summary_alt_hnco, out_dir)
 
-if "alt_hnco2" in args.test or "all" in args.test:
-    out_dir = "alt_hnco2"
+if "alt_hnco_hadamac" in args.test or "all" in args.test:
+    out_dir = "alt_hnco_hadamac"
     if args.assign:
         # Create output directory, if it doesn't already exist
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_hnco2.yaml",
-                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hadamac.yaml",
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML", 
+                            "--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -575,7 +582,8 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hncacb.yaml")
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hncacb.yaml", ["--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -595,7 +603,8 @@ if "alt_ca_co" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_ca_co.yaml")
+            cmd = make_cmd(i, out_dir, "test/config_alt_ca_co.yaml", ["--alt_assignments_output_file", 
+                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
             run(cmd)
 
     if args.analyse:
@@ -608,7 +617,8 @@ if "alt_ca_co" in args.test or "all" in args.test:
         save_alt_summary_plots(assigns_alt, summary_alt, out_dir)
 
 #%% Test iterated assignment
-if "iterated" in args.test or "all" in args.test:
+if False:       # Temporarily removed this test
+# if "iterated" in args.test or "all" in args.test:
     out_dir = "iterated"
     if args.assign:
         # Create output directory, if it doesn't already exist
