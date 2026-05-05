@@ -540,7 +540,7 @@ if "alt_hadamac" in args.test or "all" in args.test:
         assigns_alt_hadamac.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
         summary_alt_hadamac.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
 
-        save_alt_summary_plots(assigns_hadamac, summary_hadamac, out_dir)
+        save_alt_summary_plots(assigns_alt_hadamac, summary_alt_hadamac, out_dir)
 
 #%% Test alternative assignments with reduced atom types
 #### HNCO with and without HADAMAC
@@ -605,7 +605,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
         assigns_alt_hnco_hncacb.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
         summary_alt_hnco_hncacb.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
 
-        save_alt_summary_plots(assigns_alt, summary_alt, out_dir)
+        save_alt_summary_plots(assigns_alt_hnco_hncacb, summary_alt_hnco_hncacb, out_dir)
 
 # All CA and CO shifts, but no CB
 if "alt_ca_co" in args.test or "all" in args.test:
@@ -626,7 +626,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
         assigns_alt_ca_co.to_csv(path/("output/"+out_dir+"_all.txt"), sep="\t", float_format="%.3f")
         summary_alt_ca_co.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
 
-        save_alt_summary_plots(assigns_alt, summary_alt, out_dir)
+        save_alt_summary_plots(assigns_alt_ca_co, summary_alt_ca_co, out_dir)
 
 #%% Test iterated assignment
 if False:       # Temporarily removed this test
