@@ -129,9 +129,6 @@ class SNAPS_assigner:
             self.logger.error("Some required parameters were missing/not imported: %s",
                                 ", ".join(missing_pars))
 
-        # Find the full paths for parameter files (eg d_mean.csv)
-        # In the YAML file, only the file name is given, so find the parent folder 
-        # of the config file and add it
         par_dir = Path(filename).parent
 
         for par_name, par in self.pars.items():
@@ -291,7 +288,7 @@ class SNAPS_assigner:
                                        difference(seq_df["Res_N"]))
             if len(missing_residue_numbers)>0:
                 tmp = pd.DataFrame({"Res_N":list(missing_residue_numbers),
-                                    "Res_type":"X","Res_name":np.nan})
+                                    "Res_type":"X","Res_name":np.NaN})
                 tmp["Res_name"] = tmp["Res_N"].astype(str) + tmp["Res_type"]
                 tmp["Res_name"] = tmp["Res_name"].str.rjust(5)
                 tmp.index = tmp["Res_N"]
@@ -462,8 +459,8 @@ class SNAPS_assigner:
         preds = preds.drop(preds.index[preds["Res_type"]=="P"])
 
         # Remove references to deleted residues from Res_name_m1/p1
-        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.nan
-        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.nan
+        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.NaN
+        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.NaN
 
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
@@ -490,7 +487,7 @@ class SNAPS_assigner:
         M = len(preds.index)
 
         if N>M:     # If there are more spin systems than predictions
-            dummies = pd.DataFrame(np.nan, columns = preds.columns,
+            dummies = pd.DataFrame(np.NaN, columns = preds.columns,
                         index=["DR_"+str(i) for i in 1+np.arange(N-M)])
             dummies["Res_name"] = dummies.index
             dummies["Dummy_res"] = True
@@ -498,7 +495,7 @@ class SNAPS_assigner:
             preds = pd.concat([preds, dummies])
             self.logger.info("Added %d dummy predicted residues" % len(dummies.index))
         elif M>N:
-            dummies = pd.DataFrame(np.nan, columns = obs.columns,
+            dummies = pd.DataFrame(np.NaN, columns = obs.columns,
                         index=["DSS_"+str(i) for i in 1+np.arange(M-N)])
             dummies["SS_name"] = dummies.index
             dummies["Dummy_SS"] = True
@@ -668,28 +665,28 @@ class SNAPS_assigner:
                                                 # each Res/SS pair
             log_prob_matrix = log_prob_matrix + log10(default_prob) * na_matrix
 
-        if self.pars["use_SS_class_info"]:
-            # For each type of residue type information that's available, make a
-            # matrix showing the probability modifications due to type mismatch,
-            # then add it to log_prob_matrix
-            # Maybe make SS_class mismatch a parameter in config file?
-            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
-                #print(ss_class)
-                SS_class_matrix = pd.DataFrame(0.0, index=log_prob_matrix.index,
-                                                columns=log_prob_matrix.columns)
-
-                # For each amino acid type in turn:
-                for res in preds["Res_type"].dropna().unique():
-                    # Work out which observations could be that aa type
-                    allowed = obs[ss_class].str.contains(res).fillna(True)
-                    # Select the predictions which are that aa type
-                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"].to_list()
-                    # For the selected predictions, penalise any observations
-                    # where the current aa type is not allowed
-                    for p in pred_list:
-                        SS_class_matrix.loc[:,p] = (1 - allowed.astype(float))*-2 #log10(0.01)
-
-                log_prob_matrix = log_prob_matrix + SS_class_matrix
+#        if self.pars["use_ss_class_info"]:
+#            # For each type of residue type information that's available, make a
+#            # matrix showing the probability modifications due to type mismatch,
+#            # then add it to log_prob_matrix
+#            # Maybe make SS_class mismatch a parameter in config file?
+#            for ss_class in {"SS_class","SS_class_m1"}.intersection(obs.columns):
+#                #print(ss_class)
+#                SS_class_matrix = pd.DataFrame(0, index=log_prob_matrix.index,
+#                                           columns=log_prob_matrix.columns)
+#
+#                # For each amino acid type in turn:
+#                for res in preds["Res_type"].dropna().unique():
+#                    # Work out which observations could be that aa type
+#                    allowed = obs[ss_class].str.contains(res).fillna(True)
+#                    # Select the predictions which are that aa type
+#                    pred_list = preds.loc[preds["Res_type_m1"]==res,"Res_name"]
+#                    # For the selected predictions, penalise any observations
+#                    # where the current aa type is not allowed
+#                    for p in pred_list:
+#                        SS_class_matrix.loc[:,p] = (~allowed)*-100 #log10(0.01)
+#
+#                log_prob_matrix = log_prob_matrix + SS_class_matrix
 
         # Sort out NAs and dummy residues/spin systems
         log_prob_matrix[log_prob_matrix.isna()] = 2*np.nanmin(
@@ -755,8 +752,9 @@ class SNAPS_assigner:
                 consistent_links_atom = (abs(mismatch_atom) < threshold)
 
                 # Make a note of NA positions, and set them to default value
-                mismatch_atom = mismatch_atom.fillna(0.0)
-                consistent_links_atom = consistent_links_atom.fillna(0.0)
+                na_mask = np.isnan(mismatch_atom)
+                mismatch_atom[na_mask] = 0
+                consistent_links_atom[na_mask] = 0
 
                 # Update mismatch and consistent links matrixes
                 mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
@@ -780,8 +778,6 @@ class SNAPS_assigner:
         Parameters
         score_matrix: a pandas dataframe containing the scores, and with row and
             column labels
-        maximise: if True, returns the assignment with the maximum score, otherwise return
-            assignment with the minimum score
         inc: a DataFrame of (row, col) pairs which must be part of the assignment.
             First column has the index names, second has the column names.
         exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
@@ -791,13 +787,14 @@ class SNAPS_assigner:
         row_name = score_matrix.index.name
         col_name = score_matrix.columns.name
 
-        self.logger.debug("Started linear assignment")
+        self.logger.info("Started linear assignment")
 
         if inc is not None:
             # Check for conflicting entries in inc
             conflicts = inc[row_name].duplicated(keep=False) | inc[col_name].duplicated(keep=False)
             if any(conflicts):
                 self.logger.warning("Warning: entries in inc conflict with one another - dropping conflicts")
+                #print(inc[conflicts])
                 inc = inc[~conflicts]
 
             if exc is not None:
@@ -806,13 +803,14 @@ class SNAPS_assigner:
                 exc_in_inc = exc[row_name].isin(inc[row_name]) | exc[col_name].isin(inc[col_name])
                 if any(exc_in_inc):
                     self.logger.warning("Some values in exc are also found in inc, so are redundant.")
+                    #print(exc[exc_in_inc])
                     exc = exc.loc[~exc_in_inc, :]
 
             # Removed fixed assignments from probability matrix and obs, preds
             # dataframes. Latter is needed if inc includes any dummy SS/res,
             # and to detect if the reduced data is entirely dummies
             score_matrix_reduced = score_matrix.drop(index=inc[row_name]).drop(columns=inc[col_name])
-            self.logger.debug("%d assignments were fixed, %d remain to be assigned"
+            self.logger.info("%d assignments were fixed, %d remain to be assigned"
                              % (len(inc), len(score_matrix_reduced.index)))
         else:
             score_matrix_reduced = score_matrix
@@ -831,20 +829,20 @@ class SNAPS_assigner:
                 penalty = -2*score_matrix.abs().max().max()
             else:
                 penalty = 2*score_matrix.abs().max().max()
-            
+
             for i, r in exc.iterrows():     # iterates over (index, row as pd.Series) tuples
                 # If one side of an exclude pair is a dummy row or column,
                 # exclude *all* dummy rows and columns
-                if r[col_name] in dummy_cols:
+                if r[row_name] in dummy_rows:
                     score_matrix_reduced.loc[r[row_name],
                                              dummy_cols] = penalty
-                elif r[row_name] in dummy_rows:
+                elif r[col_name] in dummy_cols:
                     score_matrix_reduced.loc[dummy_rows,
                                              r[col_name]] = penalty
                 else:
                     score_matrix_reduced.loc[r["SS_name"], r["Res_name"]] = penalty
 
-            self.logger.debug("Penalised %d excluded row,column pairs" % len(exc.index))
+            self.logger.info("Penalised %d excluded row,column pairs" % len(exc.index))
 
         if maximise:
             row_ind, col_ind = linear_sum_assignment(-1*score_matrix_reduced)
@@ -894,9 +892,10 @@ class SNAPS_assigner:
                              preds.loc[:, preds.columns.isin(
                                      valid_atoms+["Res_name"])],
                              on="Res_name", suffixes=("","_pred"), how="left")
-        
-        assign_df.index = assign_df.SS_name     # Needed to match Log_prob to correct row.
-        assign_df.index.names = ["index"]
+
+        # assign_df["Log_prob"] = log_prob_matrix.lookup(
+        #                                     assign_df["SS_name"],
+        #                                     assign_df["Res_name"])
         assign_df["Log_prob"] = df_lookup(log_prob_matrix,
                                           assign_df["SS_name"],
                                           assign_df["Res_name"])
@@ -909,16 +908,13 @@ class SNAPS_assigner:
 
         return(assign_df)
 
-    def assign_from_preds(self, set_assign_df=False, inc=None, exc=None):
+    def assign_from_preds(self, set_assign_df=False):
         """Assign the observed spin systems using predicted shifts only
 
         This function essentially wraps around find_best_assignment() and
         make_assign_df()
-        inc: a DataFrame of (row, col) pairs which must be part of the assignment.
-            First column has the index names, second has the column names.
-        exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
         """
-        matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, inc=inc, exc=exc)
+        matching = self.find_best_assignment(self.log_prob_matrix, maximise=True)
         assign_df = self.make_assign_df(matching, set_assign_df)
 
         self.logger.info("Finished calculating best assignment based on predictions")
@@ -954,6 +950,7 @@ class SNAPS_assigner:
         matching: a DataFrame with Res_name and SS_name columns
         threshold: the maximum allowed mismatch for a good sequential link
         """
+        breakpoint()
         # Create mismatch matrix if it doesn't already exist
         if self.mismatch_matrix is None:
             self.calc_mismatch_matrix()
@@ -985,8 +982,8 @@ class SNAPS_assigner:
                                 tmp_m1["SS_name_m1"], tmp_m1["SS_name"])), index=tmp_m1.index)
         tmp["Num_good_links_p1"] = pd.Series(list(df_lookup(self.consistent_links_matrix,
                                 tmp_p1["SS_name"], tmp_p1["SS_name_p1"])), index=tmp_p1.index)
-        tmp["Num_good_links_m1"] = tmp["Num_good_links_m1"].fillna(0)
-        tmp["Num_good_links_p1"] = tmp["Num_good_links_p1"].fillna(0)
+        tmp["Num_good_links_m1"].fillna(0, inplace=True)
+        tmp["Num_good_links_p1"].fillna(0, inplace=True)
         tmp["Num_good_links"] = tmp["Num_good_links_m1"] + tmp["Num_good_links_p1"]
 
         # Add an assignment confidence column
@@ -1045,8 +1042,8 @@ class SNAPS_assigner:
             self.logger.info("Finished checking assignment consistency")
         else:
             # You can't do a comparison without sequential atoms
-            assign_df["Max_mismatch_m1"] = np.nan
-            assign_df["Max_mismatch_p1"] = np.nan
+            assign_df["Max_mismatch_m1"] = np.NaN
+            assign_df["Max_mismatch_p1"] = np.NaN
             assign_df["Num_good_links_m1"] = 0
             assign_df["Num_good_links_p1"] = 0
             assign_df["Confidence"] = "Undefined"
@@ -1062,10 +1059,10 @@ class SNAPS_assigner:
         """ Find the next-best assignment(s) for each residue or spin system
 
         This works by setting the log probability to a very high value for each
-        residue in turn, and rerunning the assignment. Assumes that the best assignment
-        has already been found, and is stored in self.assign_df.
+        residue in turn, and rerunning the assignment
 
         Arguments:
+        best_match_indexes: [row_ind, col_ind] output from find_best_assignment()
         N: number of alternative assignments to generate
         by_ss: if true, calculate next best assignment for each spin system.
             Otherwise, calculate it for each residue.
@@ -1080,8 +1077,6 @@ class SNAPS_assigner:
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
         alt_matching = None
-        dummy_rows = self.obs.loc[self.obs.Dummy_SS, "SS_name"]
-        dummy_cols = self.preds.loc[self.preds.Dummy_res, "Res_name"]
 
         # Calculate sum probability for the best matching
         best_sum_prob = self.calc_overall_matching_prob(best_matching)
@@ -1104,8 +1099,7 @@ class SNAPS_assigner:
             excluded = best_matching.loc[[i], :]
 
             for j in range(N):
-                alt_matching = self.find_best_assignment(self.log_prob_matrix, exc=excluded, 
-                                                         dummy_rows=dummy_rows, dummy_cols=dummy_cols)
+                alt_matching = self.find_best_assignments(exc=excluded)
 
                 alt_matching["Rank"] = j+2
                 alt_sum_prob = self.calc_overall_matching_prob(alt_matching)
@@ -1114,26 +1108,26 @@ class SNAPS_assigner:
                 # Add the alt match for this ss or res to the results dataframe
                 # and also the excluded dataframe.
                 if by_ss:
-                    alt_matching_all = pd.concat([alt_matching_all, 
-                                                  alt_matching.loc[alt_matching["SS_name"]==ss, :]], 
-                                                  ignore_index=True)
+                    # alt_matching_all = alt_matching_all.append(
+                    #         alt_matching.loc[alt_matching["SS_name"]==ss, :],
+                    #         ignore_index=True)
+                    alt_matching_all = pd.concat([alt_matching_all, alt_matching.loc[alt_matching["SS_name"]==ss, :]], ignore_index=True)
                     res = alt_matching.loc[alt_matching["SS_name"]==ss,
                                            "Res_name"].tolist()[0]
                     # The .tolist()[0] is to convert a single-item series into a string.
                 else:
-                    alt_matching_all = pd.concat([alt_matching_all, 
-                                                  alt_matching.loc[alt_matching["Res_name"]==res, :]], 
-                                                  ignore_index=True)
+                    # alt_matching_all = alt_matching_all.append(
+                    #         alt_matching.loc[alt_matching["Res_name"]==res, :],
+                    #         ignore_index=True)
+                    alt_matching_all = pd.concat([alt_matching_all, alt_matching.loc[alt_matching["Res_name"]==res, :]], ignore_index=True)
 
                     ss = alt_matching.loc[alt_matching["Res_name"]==res,
                                           "SS_name"].tolist()[0]
                 # excluded = excluded.append(pd.DataFrame({"SS_name":[ss],"Res_name":[res]}),
                 #                            ignore_index=True)
-                excluded = pd.concat([excluded, pd.DataFrame({"SS_name":[ss],"Res_name":[res]})], 
-                                     ignore_index=True)
+                excluded = pd.concat([excluded, pd.DataFrame({"SS_name":[ss],"Res_name":[res]})], ignore_index=True)
 
         self.alt_assign_df = self.make_assign_df(alt_matching_all)
-        
         if by_ss:
             self.alt_assign_df = self.alt_assign_df.sort_values(
                                                 by=["SS_name", "Rank"])
@@ -1166,7 +1160,7 @@ class SNAPS_assigner:
         Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
 
         # Initial best matching (subject to initial constraints)
-        best_matching = self.find_best_assignment(inc=init_inc, exc=init_exc)
+        best_matching = self.find_best_assignments(inc=init_inc, exc=init_exc)
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
 
@@ -1217,12 +1211,12 @@ class SNAPS_assigner:
                 if inc_i.shape[0]==0:
                     inc_i = None
 
-                matching_i = self.find_best_assignment(inc=inc_i, exc=exc_i,
+                matching_i = self.find_best_assignments(inc=inc_i, exc=exc_i,
                                                      return_none_if_all_dummy=True,
                                                      verbose=False)
                 if matching_i is None:
                     # If the non-constrained residues or spin systems are all
-                    # dummies, find_best_assignment will return None, and this
+                    # dummies, find_best_assignments will return None, and this
                     # node can be discarded
                     pass
                 else:
@@ -1240,7 +1234,7 @@ class SNAPS_assigner:
         """Try to find a consistent set of assignments by optimising both match
         to predictions and mismatches between adjacent residues
 
-        Returns an assign_df DataFrame, but does not modify the class
+        Returns an assign_df DataFrame, but does not modify the class unless set_assign_df==True
 
         Parameters
         threshold: the maximum allowed mismatch for a good sequential link
@@ -1312,99 +1306,6 @@ class SNAPS_assigner:
             self.assign_df = assign_df0
 
         return(assign_df0)
-    
-    def find_consistent_assignments_2(self, threshold=0.2, set_assign_df=False, max_iterations=10):
-        """Try to find a consistent set of assignments by optimising both match
-        to predictions and mismatches between adjacent residues.
-        In this version, only exclude the single incorrect match at the end of each
-        connected fragment, instead of excluding all mismatches.
-
-        Returns an assign_df DataFrame, but does not modify the class
-
-        Parameters
-        threshold: the maximum allowed mismatch for a good sequential link
-        """
-
-        self.logger.info("Started assigning based on predictions and sequential links")
-        assign_df0 = self.assign_from_preds()
-        assign_df0 = self.add_consistency_info(assign_df0, threshold)
-        best_assign_df = assign_df0
-        N_HM_conf0 = assign_df0["Confidence"].isin(["High","Medium"]).sum()
-        self.logger.info("At the current stage, there are "+str(N_HM_conf0)+
-                         " high or medium confidence assignments")
-
-        iterations = 0
-        unsuccessful_iterations = 0
-
-        a = self.copy()
-        penalty = -1 # a.log_prob_matrix.min().min()
-
-        while unsuccessful_iterations < max_iterations:
-            # Find all residues with an adjacent confident residue
-            HM_conf_res = assign_df0.loc[assign_df0["Confidence"].isin(["High","Medium"]),
-                                         "Res_name"].tolist()
-
-            #Make a dataframe for looking up which spin system is assigned to each residue
-            tmp = assign_df0[["Res_name","SS_name"]]
-            tmp.index = tmp["Res_name"]
-
-            # Penalise any spin system assignments that don't match a neighbouring confident assignment
-            
-            breakpoint()
-            for res in HM_conf_res:
-                # Get the neighbouring residues
-                res_m1 = self.preds.loc[res,"Res_name_m1"]
-                res_p1 = self.preds.loc[res,"Res_name_p1"]
-                
-                ss = tmp.SS_name[res]
-
-                # (Need to be careful with NaN values at this point)    
-                if not pd.isna(res_m1) and res_m1 not in HM_conf_res:
-                    ss_m1 = tmp.loc[res_m1,"SS_name"]
-                    # Set the inconsistent spin system to have a high log_prob
-                    # penalty is added so in case no spin systems are allowed -
-                    # this way, the predictions do still have an influence.
-                    if ~a.obs.Dummy_SS[ss_m1]:          # Don't penalise dummy residues
-                        a.log_prob_matrix.loc[ss_m1, res_m1] += penalty
-                        print(res_m1, ss_m1)
-                if not pd.isna(res_p1) and res_p1 not in HM_conf_res:
-                    ss_p1 = tmp.loc[res_p1,"SS_name"]
-                    #Set the inconsistent spins system to have a high log_prob
-                    if ~a.obs.Dummy_SS[ss_p1]:          # Don't penalise dummy residues
-                        a.log_prob_matrix.loc[ss_p1, res_p1] += penalty
-                        print(res_p1, ss_p1)
-
-            # Make a list of high confidence assignments to enforce 
-            high_conf_assignments = assign_df0.loc[assign_df0["Confidence"].isin(["High"]),["SS_name","Res_name"]]
-
-            # Rerun assignment and see how many are consistent now
-            assign_df1 = a.assign_from_preds(inc=high_conf_assignments)
-            assign_df1 = a.add_consistency_info(assign_df1, threshold)
-            N_HM_conf1 = assign_df1["Confidence"].isin(["High","Medium"]).sum()
-            print()
-
-            # Check if the number of high/medium confidence assignments has increased
-            # If yes, try another round of consrtained assignment
-            # If no, stick with the previous best assignment.
-            if N_HM_conf1 > N_HM_conf0:
-                assign_df0 = assign_df1
-                best_assign_df = assign_df1
-                N_HM_conf0 = N_HM_conf1
-                unsuccessful_iterations = 0
-            else:
-                assign_df0 = assign_df1
-                unsuccessful_iterations += 1
-            iterations += 1
-
-            self.logger.info("After iteration "+str(iterations)+", there are "+str(N_HM_conf1)+
-                            " high or medium confidence assignments")
-            print("After iteration "+str(iterations)+", there are "+str(N_HM_conf1)+
-                            " high or medium confidence assignments")
-
-        if set_assign_df:
-            self.assign_df = best_assign_df
-
-        return(best_assign_df)
 
     def find_seq_assignment(self):
         """Find the ordering that maximises the number of good sequential links"""
@@ -1642,7 +1543,7 @@ class SNAPS_assigner:
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_z" in name is to ensure it sorts after the atom+"_m1" shifts
                 # eg. CA, CA_m1, CA_z
-                vlines[atom+"_z"] = np.nan
+                vlines[atom+"_z"] = np.NaN
                 # Convert from wide to long
                 vlines = vlines.melt(id_vars=["Res_name"],
                                      value_vars=[atom, atom+"_m1", atom+"_z"],
@@ -1658,7 +1559,7 @@ class SNAPS_assigner:
                 # Introduce NaN's to break the line into discontinuous segments
                 # "_a" in name ensures it sorts between the atom and atom+"_m1" shifts
                 # eg. CA, CA_a, CA_m1
-                hlines[atom+"_a"] = np.nan
+                hlines[atom+"_a"] = np.NaN
                 # Convert from wide to long
                 hlines = hlines.melt(id_vars=["Res_name"],
                                      value_vars=[atom, atom+"_m1", atom+"_a"],
@@ -1733,7 +1634,7 @@ class SNAPS_assigner:
         # Plot the peaks
         for k in colourmap.keys():
             tmp = assign_df[assign_df["Confidence"]==k]
-            plt.circle(tmp["H"], tmp["N"], radius=0.02, color=colourmap[k], legend_label=k)
+            plt.circle(tmp["H"], tmp["N"], color=colourmap[k], legend=k)
 
         # Label the points
         df = ColumnDataSource(assign_df)

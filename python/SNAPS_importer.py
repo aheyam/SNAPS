@@ -163,7 +163,7 @@ class SNAPS_importer:
         
         # Check that the correct dimensions were identified
         # Also check that spectrum argument is valid
-        if spectrum in ["hnco", "hncaco", "hnca","hncoca","hncacb","hncocacb"]:
+        if spectrum in ["hnco", "hncaco", "hnca","hncoca","hncacb","hncocacb","hncb","hncocb"]:
             if set(dim.keys()) != set(["H","N","C"]):
                 print("Error: couldn't identify "+spectrum+" columns.") 
         elif spectrum == "hnha":
@@ -236,6 +236,16 @@ class SNAPS_importer:
                         # Set CA shift to strongest peak in this spin system.         
                         i = ss_peaks.loc[:,"Height"].idxmax()
                         obs.loc[ss, "CA"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hncocb":    # For HNcoCACB experiments tuned to only show CB peaks
+                                            # Note this does not account for glycine peaks in any way!
+                        # Set CB_m1 shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "CB_m1"] = ss_peaks.loc[i, "C"]
+                    elif spec=="hncb":      # For HNCACB experiments tuned to only show CB peaks
+                                            # Note this does not account for glycine peaks in any way! May lead to accidentally picking i-1 CB if i is glycine
+                        # Set CB shift to strongest peak in this spin system.         
+                        i = ss_peaks.loc[:,"Height"].idxmax()
+                        obs.loc[ss, "CB"] = ss_peaks.loc[i, "C"]
                     elif spec=="hncocacb":
                         # Use a simple heuristic to guess if peak is CA or CB:
                         # - If only 1 peak, CA if shift >41 ppm, otherwise CB

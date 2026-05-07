@@ -3,6 +3,7 @@
 
 from tabulate import tabulate
 
+import numpy as np
 import pandas as pd
 from SNAPS_importer import SNAPS_importer
 from SNAPS_assigner import SNAPS_assigner, df_lookup
@@ -11,56 +12,71 @@ import logging
 import pdb
 
 working_dir = r"C:\Users\chmahey\OneDrive - University of Leeds\Data\Jenny Tomlinson SNAPS"
-output_name = r"alphafold_0 withH iterated"
+output_name = r"C4_1-400 deuterated corrected CB iteration_test_2"
 
 a = SNAPS_assigner()
 a.read_config_file("../config/config_yaml_2.txt")
 a.pars["iterate_until_consistent"] = True
+a.pars["alt_assignments"] = 0
+
 
 importer = SNAPS_importer()
 importer.import_hsqc_peaks(working_dir+r"\peaklists\hsqc_2.tsv", "ccpn")
 importer.import_3d_peaks(working_dir+r"\peaklists\hncaco_2.tsv", "ccpn", "hncaco")
 importer.import_3d_peaks(working_dir+r"\peaklists\hnco_2.tsv", "ccpn", "hnco")
-importer.import_3d_peaks(working_dir+r"\peaklists\hncacb_2.tsv", "ccpn", "hncacb")
+importer.import_3d_peaks(working_dir+r"\peaklists\hncacb_2.tsv", "ccpn", "hncb")
 importer.import_3d_peaks(working_dir+r"\peaklists\hnca_2.tsv", "ccpn", "hnca")
-importer.import_3d_peaks(working_dir+r"\peaklists\hncocacb_2.tsv", "ccpn", "hncocacb")
+importer.import_3d_peaks(working_dir+r"\peaklists\hncocacb_2.tsv", "ccpn", "hncocb")
 importer.import_3d_peaks(working_dir+r"\peaklists\hncoca_2.tsv", "ccpn", "hncoca")
 importer.find_shifts_from_peaks()
 
 a.obs = importer.obs
-a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_0_H.cs", "shiftx2", offset=0)
+
+# Make a mixed deuteration predictions list
+preds_deut = a.import_pred_shifts(working_dir+r"\shift predictions\C4_1-400 pH8 deuterated withH.cs", "shiftx2", offset=0)
+# preds_prot = a.import_pred_shifts(working_dir+r"\shift predictions\C4_1-400 pH8 non-deuterated withH.cs", "shiftx2", offset=0)
+# a.preds = preds_prot
+# a.preds.CA = preds_deut.CA
+# a.preds.CA_m1 = preds_deut.CA_m1
+
+# Average alphafold predictions
+# preds_0 = a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_0_H_deut.cs", "shiftx2", offset=1)
+# preds_1 = a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_1_H_deut.cs", "shiftx2", offset=1)
+# preds_2 = a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_2_H_deut.cs", "shiftx2", offset=1)
+# preds_3 = a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_3_H_deut.cs", "shiftx2", offset=1)
+# preds_4 = a.import_pred_shifts(working_dir+r"\shift predictions\alphafold_model_4_H_deut.cs", "shiftx2", offset=1)
+atoms = list(a.pars["atom_set"])
+# a.preds.loc[:,atoms] = (preds_0.loc[:,atoms]+preds_1.loc[:,atoms]+preds_2.loc[:,atoms]+preds_3.loc[:,atoms]+preds_4.loc[:,atoms])/5
 
 a.prepare_obs_preds()
+
+# Correct wrongly imported CBs for glycine residues
+a.obs.loc[a.obs.CA<48,"CB"] = np.nan
+
 a.calc_log_prob_matrix()
 a.calc_mismatch_matrix()
 
 if a.pars["iterate_until_consistent"]:
-    a.assign_df = a.find_consistent_assignments(set_assign_df=True)
+    a.assign_df = a.find_consistent_assignments_2(set_assign_df=True, max_iterations=20)
+    b = a.copy()
+    b.assign_df = b.find_consistent_assignments(set_assign_df=True)
 else:
     a.assign_from_preds(set_assign_df=True)
     # breakpoint()
     a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
     # breakpoint()
 
-# headings = '''
-#     Res_name Res_N Res_type SS_name Dummy_res Dummy_SS CA CA_pred HA HA_pred H H_pred CB CB_pred
-#         C C_pred N N_pred Log_prob Max_mismatch_m1 Max_mismatch_p1 Num_good_links_m1 
-# '''.split()
-# table = []
-# for df_index, df_row in a.assign_df.iterrows():
-#     table_row = []
-#     table.append(table_row)
-#     for heading in headings:
-#         table_row.append(df_row[heading])
-
-# with open(working_dir+r"\SNAPS_output.txt", 'w') as fp:
-#     print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
-
-
-
-#### Write chemical shift lists
 a.assign_df.to_csv(working_dir+r"\output\assign_df_"+output_name+".txt")
 
+# Generate alt_assignments
+a.find_alt_assignments(N=a.pars["alt_assignments"], by_ss=True)
+a.alt_assign_df.to_csv(working_dir+r"\output\alt_assign_ss_"+output_name+".txt")
+a.find_alt_assignments(N=a.pars["alt_assignments"], by_ss=False)
+a.alt_assign_df.to_csv(working_dir+r"\output\alt_assign_res_"+output_name+".txt")
+
+#### Write chemical shift lists
+# a.assign_df.to_csv(working_dir+r"\output\assign_df_"+output_name+".txt")
+# a.alt_assign_df.to_csv(working_dir+r"\output\alt_assign_df_"+output_name+".txt")
 a.output_shiftlist(working_dir+r"\output\shiftlist_"+output_name+".txt", "sparky",
                     confidence_list=["High","Medium","Low","Unreliable","Undefined"])
 
