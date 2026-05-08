@@ -50,6 +50,15 @@ def get_arguments(system_args):
                         classes for the i-1 residue. No spaces.
                         eg. "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML" for
                         a sequential HADAMAC """)
+    parser.add_argument("--simulate_pred_shifts", action="store_true",
+                        help="""If present and if shift_type="test", then use simulated 
+                        predicted shifts instead of the ones given in pred_file""")
+    parser.add_argument("--sim_pred_multiplier", type=float, default=0.0,
+                        help="""If simulate_pred_shifts is True, multiply the atom_95_quartile
+                        given in the config file by this value to get the standard deviation 
+                        of the simulated shifts for each atom type.""")
+    parser.add_argument("--sim_pred_seed", type=int, default=0,
+                        help="Random seed used if simulate_pred_shifts is True")
     #TODO: Need to rethink how SS_class info is imported.
 
     # Options controlling output files
@@ -142,8 +151,16 @@ def runSNAPS(system_args):
     logger.info("Finished reading in %d spin systems from %s",
                  len(a.obs["SS_name"]), args.shift_file)
 
+    if args.simulate_pred_shifts:
+        # Calculate the errors for each atom as the 95% percentile interval multipled by 
+        # the sim_pred_multiplier argument
+        atom_errors = a.pars["atom_95_percentile"]
+        for k in atom_errors.keys():
+             atom_errors[k] = atom_errors[k]*args.sim_pred_multiplier
 
-    a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
+        a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
+    else:
+        a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
     #### Do the analysis
     a.prepare_obs_preds()
