@@ -260,12 +260,18 @@ if "basic" in args.test or "all" in args.test:
                             ~assigns_basic["Dummy_SS"] &
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_density(aes(x="Log_prob", colour="Correct"))
-        + xlim(-100, 0) ).save(path/"plots/basic_log_probability.pdf")
+        + xlim(-100, 0) ).save(path/"plots/basic_log_probability_A006.pdf")
 
         tmp = assigns_basic[~assigns_basic["Dummy_SS"] &
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_boxplot(aes(y="Log_prob", x="ID", colour="Correct"))
-        + ylim(-100,0) )
+        + ylim(-100,0) ).save(path/"plots/basic_log_probability_boxplot.pdf")
+
+        # Check whether accuracy is related to protein size
+        tmp = summary_basic
+        tmp.N_SS = tmp.N_SS.astype(float)
+        tmp.Pc_correct = tmp.Pc_correct.astype(float)
+        (ggplot(tmp) + geom_point(aes(x="N_SS", y="Pc_correct"))).save(path/"plots/basic_accuracy_vs_size.pdf")
 
 #%% Test effect of correcting the predicted shifts
 if "pred_correction" in args.test or "all" in args.test:
