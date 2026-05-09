@@ -156,8 +156,7 @@ def check_assignment_accuracy(data_dir, testset_df, ID_list,
 def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_file=None):
     """Function to check assignment accuracy
 
-    Returns a list with two items: the complete set of assignments for all
-    proteins, and a summary of the accuracy for each protein
+    Returns the complete set of assignments for all proteins
     """
     # Nb. make sure data_dir ends with a forward slash
 
