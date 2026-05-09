@@ -66,7 +66,7 @@ if False:   #   args.assign:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for id in id_all_carbons:
             seed = testset_df.loc[id, "BMRB"].astype(str)   # Use the BMRB ID if the observed shifts as the random seed   
-            cmd = make_cmd(id, out_dir, config_file="test/config_sim_preds.yaml", 
+            cmd = make_cmd(id, out_dir, config_file="test/config_sim_preds_all_carbons.yaml", 
                             extra_args=["--simulate_pred_shifts", 
                                         "--sim_pred_multiplier", str(error_multiplier), 
                                         "--sim_pred_seed", seed])
@@ -84,7 +84,7 @@ if args.analyse:
     overall_accuracy = pd.DataFrame({"Error":error_multipliers, 
                                      "Pc_correct":[summary[x].loc[0, "Pc_correct"] for x in error_multipliers]})
     plt = ggplot(overall_accuracy) + geom_point(aes(x="100*Error", y="Pc_correct"))
-    plt = plt + geom_title("Overall assignment accuracy as a function of simulated prediction error (all carbons)")
+    plt = plt + ggtitle("Overall assignment accuracy as a function of simulated prediction error (all carbons)")
     plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
@@ -102,7 +102,7 @@ if args.analyse:
     
     plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
     plt = plt + facet_wrap("Error_multiplier")
-    plt = plt + geom_title("Assignment accuracy vs protein size,at different simulated error levels (all carbons)")
+    plt = plt + ggtitle("Assignment accuracy vs protein size,at different simulated error levels (all carbons)")
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
@@ -111,7 +111,7 @@ if args.analyse:
 # Simulate predicted shifts with only H and N
 error_multipliers = [0, 0.005, 0.01, 0.015, 0.02, 0.025,0.05,0.075,0.1,0.15, 0.2, 0.25]
 
-if args.assign:
+if False: # args.assign:
     for error_multiplier in error_multipliers:
         out_dir = "sim_preds_HN_"+str(error_multiplier)
         # Create output directory, if it doesn't already exist
@@ -136,7 +136,7 @@ if args.analyse:
     overall_accuracy = pd.DataFrame({"Error":error_multipliers, 
                                      "Pc_correct":[summary[x].loc[0, "Pc_correct"] for x in error_multipliers]})
     plt = ggplot(overall_accuracy) + geom_point(aes(x="100*Error", y="Pc_correct"))
-    plt = plt + geom_title("Overall assignment accuracy as a function of simulated prediction error (amide HN only)")
+    plt = plt + ggtitle("Overall assignment accuracy as a function of simulated prediction error (amide HN only)")
     plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
@@ -150,16 +150,62 @@ if args.analyse:
             summary_all = summary[x]
         else:
             summary_all = pd.concat([summary_all, summary[x]])
-    summary_all = summary_all[summary_all.ID!="Sum"]
+    summary_all = summary_all[summary_all.ID!="Sum"]    # Remove the rows which sum/average over all proteins in testset
     
     plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
     plt = plt + facet_wrap("Error_multiplier")
-    plt = plt + geom_title("Assignment accuracy vs protein size,at different simulated error levels (amide HN only)")
+    plt = plt + ggtitle("Assignment accuracy vs protein size,at different simulated error levels (amide HN only)")
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
     plt.save(path/"plots/sim preds accuracy HN - size.pdf", height=200, width=200, units="mm")
 
+# Simulate predicted shifts with 10% error and various sets of atoms, to test effect of number of atoms on assignment accuracy
+atom_sets = ["HN","HNCO", "4_C_m1+CA", "6_CO+CA", "6_CA+CB", "all_carbons"]
+if args.assign:
+    for a in atom_sets:
+        out_dir = "sim_preds_limited_to_"+a
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for id in id_all_carbons:
+            seed = testset_df.loc[id, "BMRB"].astype(str)   # Use the BMRB ID if the observed shifts as the random seed   
+            cmd = make_cmd(id, out_dir, config_file="test/config_sim_preds_"+a+".yaml", 
+                            extra_args=["--simulate_pred_shifts", 
+                                        "--sim_pred_multiplier", "0.1", 
+                                        "--sim_pred_seed", seed])
+            run(cmd)
+
+if args.analyse:
+    assigns = {}
+    summary = {}
+    summary_all = None
+    for a in atom_sets:
+        out_dir = "sim_preds_limited_to_"+a
+        assigns[a] = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all_carbons)
+        summary[a] = summarise_results(assigns[a])
+        summary[a]["Atom_set"] = a
+        if summary_all is None:
+            summary_all = summary[a]
+        else:
+            summary_all = pd.concat([summary_all, summary[a]])
+    
+    summary_all = summary_all[summary_all.ID!="Sum"]    # Remove the rows which sum/average over all proteins in testset
+    
+    # Add information on how many atoms were used for assignment
+    summary_all["Atoms_set_N"] = 2
+    summary_all.loc[summary_all.Atom_set=="HNCO", "Atoms_set_N"] = 3
+    summary_all.loc[summary_all.Atom_set=="4_C_m1+CA", "Atoms_set_N"] = 4
+    summary_all.loc[summary_all.Atom_set=="6_CO+CA", "Atoms_set_N"] = 6
+    summary_all.loc[summary_all.Atom_set=="6_CA+CB", "Atoms_set_N"] = 6
+    summary_all.loc[summary_all.Atom_set=="all_carbons", "Atoms_set_N"] = 8
+
+    plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
+    plt += facet_grid(cols="Atom_set")
+    plt += ggtitle("Assignment accuracy vs number of atom types available, using simulated predictions")
+    plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
+    plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
+    plt += theme_bw()
+    plt.save(path/"plots/sim preds accuracy - number of atoms.pdf", height=100, width=500, units="mm")
 #%%
 if False: 
     a = SNAPS_assigner()

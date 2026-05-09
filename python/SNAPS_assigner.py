@@ -438,6 +438,9 @@ class SNAPS_assigner:
                        "Res_name_p1","Res_type_m1"]+
                       list(atom_set.intersection(preds.columns))]
 
+        self.logger.info("Finished simulating %d predicted residues from %s"
+                         % (len(preds.index), filename))
+
         self.preds = preds
         return(self.preds)
 
