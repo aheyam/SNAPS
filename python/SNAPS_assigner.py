@@ -773,7 +773,7 @@ class SNAPS_assigner:
             return(self.mismatch_matrix, consistent_links_matrix)
 
     def find_best_assignment(self, score_matrix, maximise=True, inc=None, exc=None,
-                             dummy_rows=None, dummy_cols=None, return_none_all_dummy=False):
+                             dummy_rows=[], dummy_cols=[], return_none_all_dummy=False):
         """ Use the Hungarian algorithm to find the highest scoring assignment,
         with constraints. Generalised so it can be used for assigning either
         sequentially or based on predictions.
@@ -823,10 +823,15 @@ class SNAPS_assigner:
         # If the matrix consists entirely of dummy rows or columns, the
         # assignment will not be meaningful. In this case, may want to return None
         if return_none_all_dummy:
-            if (set(score_matrix_reduced.index).issubset(dummy_rows) or
-                set(score_matrix_reduced.columns).issubset(dummy_cols)):
-                self.logger.debug("Score matrix includes only dummy rows/columns")
-                return(None)
+            if dummy_rows is not None:
+                if set(score_matrix_reduced.index).issubset(dummy_rows):
+                    self.logger.debug("Score matrix includes only dummy rows")
+                    return(None)
+            if dummy_cols is not None:
+                if set(score_matrix_reduced.columns).issubset(dummy_cols):
+                    self.logger.debug("Score matrix includes only dummy columns")
+                    return(None)   
+            
 
         if exc is not None:
             # Penalise excluded (row, col) pairs
@@ -1211,10 +1216,12 @@ class SNAPS_assigner:
                 #Construct dataframes of excluded and included pairs
                 exc_i = matching_reduced.iloc[[i],:]
                 if current_node.exc is not None:
-                    exc_i = exc_i.append(current_node.exc, ignore_index=True)
+                    # exc_i = exc_i.append(current_node.exc, ignore_index=True)
+                    exc_i = pd.concat([exc_i, current_node.exc], ignore_index=True)
                 inc_i = matching_reduced.iloc[0:i,:]
                 if current_node.inc is not None:
-                    inc_i = inc_i.append(current_node.inc, ignore_index=True)
+                    # inc_i = inc_i.append(current_node.inc, ignore_index=True)
+                    inc_i = pd.concat([inc_i, current_node.inc], ignore_index=True)
                 inc_i = inc_i.drop_duplicates()
                 # If there are no included pairs, it's better for inc_i to be None than an empty df
                 if inc_i.shape[0]==0:
@@ -1408,6 +1415,159 @@ class SNAPS_assigner:
             self.assign_df = best_assign_df
 
         return(best_assign_df)
+    
+    def find_consistent_assignments_3(self, threshold=0.2, set_assign_df=False, 
+                                      init_inc=None, init_exc=None, verbose=False,
+                                      max_iterations = 100):
+        """Try to find a consistent set of assignments by optimising both match
+        to predictions and mismatches between adjacent residues.
+        In this version, perform a tree search by finding the worst mismatch AB, creating three new nodes 
+        (A&!B, B&!A, !A&!B), then following the one with the best total probability. Inspired by Murty 
+        algorithm for k-best assignments (see: Murty, K. (1968). An Algorithm for Ranking all the Assignments 
+        in Order of Increasing Cost. Operations Research, 16(3), 682-687)
+
+        Returns an assign_df DataFrame, but does not modify the class
+
+        Parameters
+        threshold: the maximum allowed mismatch for a good sequential link
+        """
+        self.logger.info("Started assigning based on predictions and sequential links")
+        
+        Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
+
+        # Initial best matching (subject to initial constraints)
+        best_matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, 
+                                                  inc=init_inc, exc=init_exc)
+        best_matching.index = best_matching["Res_name"]     # Note that we'll index matching by Res_name
+        best_matching.index.name = None
+
+        # Define lists to keep track of nodes
+        ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
+        unranked_nodes = SortedListWithKey(
+                            [Node(self.calc_overall_matching_prob(best_matching),
+                            best_matching, inc=init_inc, exc=init_exc)],
+                            key=lambda n: n.sum_log_prob)
+        
+        iterations = 0
+        while True:
+            # Set highest scoring unranked node as current_node
+            current_node = unranked_nodes.pop()
+
+            if verbose:
+                s = str(len(ranked_nodes))+"\t"
+                if current_node.inc is not None:
+                    s = s + "inc:" +str(len(current_node.inc))+ "\t"
+                if current_node.exc is not None:
+                    s = s + "exc:"+ str(len(current_node.exc))
+                print(s)
+                self.logger.info(s)
+
+            # If the current node has forced included pairings, get a list of
+            # all parts of the matching that can vary.
+            if False:   # current_node.inc is not None:
+                matching_reduced = current_node.matching[
+                                            ~current_node.matching["SS_name"].
+                                            isin(current_node.inc["SS_name"])]
+            else:
+                matching_reduced = current_node.matching
+            matching_reduced = matching_reduced.sort_values("Res_name")
+            
+            # Find the worst mismatch in the current node
+            consistency_df = self.check_matching_consistency(current_node.matching, threshold=threshold).sort_values("Res_name")
+            worst_mismatch = consistency_df.Max_mismatch.max()
+            
+            # I don't think this selects the correct rows
+            tmp = consistency_df.Max_mismatch.idxmax()
+            first_row = consistency_df.index.get_loc(tmp)
+            pair_A = matching_reduced.iloc[[first_row],:]   # [] around first_row needed to return DataFrame instead of Series
+            pair_B = matching_reduced.iloc[[first_row+1],:]
+            pairs_AB = matching_reduced.iloc[[first_row,first_row+1],:]
+
+            if verbose:
+                s = "Worst mismatch at current node (%f): %s-%s, %s-%s" % (worst_mismatch, 
+                                                                           pair_A.Res_name, pair_A.SS_name, 
+                                                                           pair_B.Res_name, pair_B.SS_name)
+                self.logger.info(s)
+                print(s)
+
+            # Code below doesn't account for worst pair overlapping with forced-included pairs
+
+            # Create the 3 child nodes and add them to the unranked_nodes list
+            for inc_exc in [(pair_A, pair_B),(pair_B, pair_A),(pairs_AB.loc[[],:], pairs_AB)]:
+                # Set up included residues
+                inc_i = inc_exc[0]
+                if current_node.inc is not None: 
+                    # inc_i = inc_i.append(current_node.inc, ignore_index=True)
+                    inc_i = pd.concat([inc_i, current_node.inc], ignore_index=True)
+                    inc_i = inc_i.drop_duplicates()
+                if inc_i.shape[0]==0:   # If there are no included residues, faster to replace with None
+                    inc_i = None
+
+                # Set up excluded resiudes
+                exc_i = inc_exc[1]
+                if current_node.exc is not None:
+                    # exc_i = exc_i.append(current_node.exc, ignore_index=True)
+                    exc_i = pd.concat([exc_i, current_node.exc], ignore_index=True)
+                
+                # breakpoint()
+
+                # Find the best matching for the given included and excluded residues
+                matching_i = self.find_best_assignment(self.log_prob_matrix, maximise=True,
+                                                        inc=inc_i, exc=exc_i,
+                                                        return_none_all_dummy=True)
+                if matching_i is None:
+                    # If the non-constrained residues or spin systems are all
+                    # dummies, find_best_assignment will return None, and this
+                    # node can be discarded
+                    pass
+                else:
+                    # Create a new child node and add to unranked_nodes
+                    matching_i.index = matching_i["Res_name"]
+                    matching_i.index.name = None
+                    node_i = Node(self.calc_overall_matching_prob(matching_i),
+                                  matching_i, inc_i, exc_i)
+                    unranked_nodes.add(node_i)
+                
+            ranked_nodes.add(current_node)
+
+            if worst_mismatch < threshold:
+                break   # If the worst mismatch in current assignment is less than the threshold, stop searching.
+
+            iterations += 1
+            if iterations >= max_iterations:
+                break
+            breakpoint()
+        breakpoint()
+        return(ranked_nodes, unranked_nodes)
+
+        # assign_df0 = self.assign_from_preds()
+        # best_assign_df = assign_df0
+        # assign_df0 = self.add_consistency_info(assign_df0, threshold)
+        # # self.logger.info("At the current stage, there are "+str(N_HM_conf0)+
+        # #                  " high or medium confidence assignments")
+
+        # # Find the worst mismatch in the initial assignment
+        # tmp = assign_df0.Max_mismatch.idxmax()
+        # worst_pair = ((assign_df0.loc[tmp, "Res_name"],assign_df0.loc[tmp, "SS_name"]),
+        #               (assign_df0.loc[tmp+1, "Res_name"],assign_df0.loc[tmp+1, "SS_name"]))
+
+        # # Create a dataframe to keep track of the nodes
+        # tmp = {"ID": "", 
+        #        "Total_log_prob": assign_df0.Log_prob.sum(), 
+        #        "N_mismatches": (assign_df0.Max_mismatch>threshold).sum(),
+        #        "Worst_mismatch": assign_df0.Max_mismatch.max(),
+        #        "Worst_pair": worst_pair,
+        #        "Assignment": (assign_df0.sort_values("Res_name").SS_name+";").sum()}    # List of SS_names, separated by ;, in order of ascending Res_name
+        #                                                                                 # Should probably have a separator that is definitely not going to appear in names...
+        # node_df = pd.DataFrame(tmp)
+
+        # breakpoint()
+        
+
+        # if set_assign_df:
+        #     self.assign_df = best_assign_df
+
+        # return(best_assign_df)
 
     def find_seq_assignment(self):
         """Find the ordering that maximises the number of good sequential links"""

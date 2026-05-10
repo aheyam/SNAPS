@@ -87,7 +87,7 @@ def get_arguments(system_args):
 
 
     args = parser.parse_args(system_args)
-    if False:   # For convenience when testing
+    if True:   # For convenience when testing
         args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
                                   "data/P3a_L273R/shiftx2.cs",
                                   "output/test.txt",
@@ -178,6 +178,9 @@ def runSNAPS(system_args):
             else:
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
+    
+    a.find_consistent_assignments_3(verbose=True)
+    
     #### Output the results
     
     # Tabulate doesn't account for if some atom types are missing.
@@ -223,6 +226,7 @@ def runSNAPS(system_args):
     # Close the log file
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
+
 
     return(plots)
 
