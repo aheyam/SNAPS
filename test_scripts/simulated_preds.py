@@ -15,6 +15,7 @@ from pathlib import Path
 import argparse
 from subprocess import run
 from plotnine import *
+import plotnine
 
 parser = argparse.ArgumentParser(
         description="Test SNAPS on simulated predicted shifts")
@@ -59,7 +60,7 @@ def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
 # Simulate predicted shifts with all atoms except HA
 error_multipliers = [0, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25]
 
-if False:   #   args.assign:
+if args.assign:
     for error_multiplier in error_multipliers:
         out_dir = "sim_preds_carbons_"+str(error_multiplier)
         # Create output directory, if it doesn't already exist
@@ -100,7 +101,8 @@ if args.analyse:
             summary_all = pd.concat([summary_all, summary[x]])
     summary_all = summary_all[summary_all.ID!="Sum"]
     
-    plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
+    plt = ggplot(summary_all, aes(x="N.astype(int)", y="Pc_correct.astype(float)")) + geom_point()
+    plt += stat_smooth(method="lm")
     plt = plt + facet_wrap("Error_multiplier")
     plt = plt + ggtitle("Assignment accuracy vs protein size,at different simulated error levels (all carbons)")
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
@@ -111,7 +113,7 @@ if args.analyse:
 # Simulate predicted shifts with only H and N
 error_multipliers = [0, 0.005, 0.01, 0.015, 0.02, 0.025,0.05,0.075,0.1,0.15, 0.2, 0.25]
 
-if False: # args.assign:
+if args.assign:
     for error_multiplier in error_multipliers:
         out_dir = "sim_preds_HN_"+str(error_multiplier)
         # Create output directory, if it doesn't already exist
@@ -152,7 +154,8 @@ if args.analyse:
             summary_all = pd.concat([summary_all, summary[x]])
     summary_all = summary_all[summary_all.ID!="Sum"]    # Remove the rows which sum/average over all proteins in testset
     
-    plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
+    plt = ggplot(summary_all, aes(x="N.astype(int)", y="Pc_correct.astype(float)")) + geom_point()
+    plt += stat_smooth(method="lm")
     plt = plt + facet_wrap("Error_multiplier")
     plt = plt + ggtitle("Assignment accuracy vs protein size,at different simulated error levels (amide HN only)")
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
@@ -200,7 +203,10 @@ if args.analyse:
     summary_all.loc[summary_all.Atom_set=="all_carbons", "Atoms_set_N"] = 8
 
     plt = ggplot(summary_all) + geom_point(aes(x="N.astype(int)", y="Pc_correct.astype(float)"))
-    plt += facet_grid(cols="Atom_set")
+    if plotnine.__version__ < "0.13":
+        plt += facet_grid(". ~ Atom_set")
+    else:
+        plt += facet_grid(cols="Atom_set")
     plt += ggtitle("Assignment accuracy vs number of atom types available, using simulated predictions")
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 

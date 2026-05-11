@@ -59,6 +59,8 @@ def get_arguments(system_args):
                         of the simulated shifts for each atom type.""")
     parser.add_argument("--sim_pred_seed", type=int, default=0,
                         help="Random seed used if simulate_pred_shifts is True")
+    parser.add_argument("--test", action="store_true",
+                        help="Test SNAPS using example data")
     #TODO: Need to rethink how SS_class info is imported.
 
     # Options controlling output files
@@ -87,7 +89,7 @@ def get_arguments(system_args):
 
 
     args = parser.parse_args(system_args)
-    if True:   # For convenience when testing
+    if args.test:   # For convenience when testing
         args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
                                   "data/P3a_L273R/shiftx2.cs",
                                   "output/test.txt",
@@ -96,7 +98,8 @@ def get_arguments(system_args):
                                   "-c","config/config_yaml_2.txt",
                                   "-l","output/test.log",
                                   "--strip_plot_file", "output/strip_plot.htm",
-                                  "--hsqc_plot_file", "output/hsqc_plot.htm"))
+                                  "--hsqc_plot_file", "output/hsqc_plot.htm",
+                                  "--test"))
     return(args)
 
 def runSNAPS(system_args):
@@ -178,8 +181,8 @@ def runSNAPS(system_args):
             else:
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
-    
-    a.find_consistent_assignments_3(verbose=True)
+    if args.test:
+        a.find_consistent_assignments_3(verbose=True)
     
     #### Output the results
     
@@ -197,6 +200,7 @@ def runSNAPS(system_args):
 
     # with open(args.output_file, 'w') as fp:
     #     print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
+    
     a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
                            index=False)
     logger.info("Finished writing results to %s", args.output_file)

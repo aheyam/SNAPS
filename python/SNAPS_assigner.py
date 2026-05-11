@@ -1418,7 +1418,7 @@ class SNAPS_assigner:
     
     def find_consistent_assignments_3(self, threshold=0.2, set_assign_df=False, 
                                       init_inc=None, init_exc=None, verbose=False,
-                                      max_iterations = 100):
+                                      max_iterations = 500):
         """Try to find a consistent set of assignments by optimising both match
         to predictions and mismatches between adjacent residues.
         In this version, perform a tree search by finding the worst mismatch AB, creating three new nodes 
@@ -1442,19 +1442,29 @@ class SNAPS_assigner:
         best_matching.index.name = None
 
         # Define lists to keep track of nodes
-        ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
-        unranked_nodes = SortedListWithKey(
-                            [Node(self.calc_overall_matching_prob(best_matching),
-                            best_matching, inc=init_inc, exc=init_exc)],
-                            key=lambda n: n.sum_log_prob)
+        # ranked_nodes = SortedListWithKey(key=lambda n: n.sum_log_prob)
+        # unranked_nodes = SortedListWithKey(
+        #                     [Node(self.calc_overall_matching_prob(best_matching),
+        #                     best_matching, inc=init_inc, exc=init_exc)],
+        #                     key=lambda n: n.sum_log_prob)
         
+        tmp = {"ID": 0, 
+               "sum_log_prob": self.calc_overall_matching_prob(best_matching), 
+               "matching": best_matching,
+               "inc": init_inc, "exc": init_exc,
+               "Ranked": False}    
+                                                                                        
+        node_df = pd.DataFrame([tmp])
+        # breakpoint()
         iterations = 0
         while True:
             # Set highest scoring unranked node as current_node
-            current_node = unranked_nodes.pop()
+            # current_node = unranked_nodes.pop()
+            next_best_node_index = node_df.loc[~node_df.Ranked, "sum_log_prob"].idxmax()
+            current_node = node_df.loc[next_best_node_index,:]
 
             if verbose:
-                s = str(len(ranked_nodes))+"\t"
+                s = str(node_df.Ranked.sum())+"\t" + str(current_node.sum_log_prob) + "\t"
                 if current_node.inc is not None:
                     s = s + "inc:" +str(len(current_node.inc))+ "\t"
                 if current_node.exc is not None:
@@ -1464,7 +1474,7 @@ class SNAPS_assigner:
 
             # If the current node has forced included pairings, get a list of
             # all parts of the matching that can vary.
-            if False:   # current_node.inc is not None:
+            if False:   # current_node.inc is not None:     # Currently disabled
                 matching_reduced = current_node.matching[
                                             ~current_node.matching["SS_name"].
                                             isin(current_node.inc["SS_name"])]
@@ -1485,8 +1495,8 @@ class SNAPS_assigner:
 
             if verbose:
                 s = "Worst mismatch at current node (%f): %s-%s, %s-%s" % (worst_mismatch, 
-                                                                           pair_A.Res_name, pair_A.SS_name, 
-                                                                           pair_B.Res_name, pair_B.SS_name)
+                                                                           pair_A.Res_name.values[0], pair_A.SS_name.values[0], 
+                                                                           pair_B.Res_name.values[0], pair_B.SS_name.values[0])
                 self.logger.info(s)
                 print(s)
 
@@ -1496,7 +1506,11 @@ class SNAPS_assigner:
             for inc_exc in [(pair_A, pair_B),(pair_B, pair_A),(pairs_AB.loc[[],:], pairs_AB)]:
                 # Set up included residues
                 inc_i = inc_exc[0]
+                # breakpoint()
                 if current_node.inc is not None: 
+                    # Check if any of the excluded residues for this new node are also force-included
+                    if set(exc_i.Res_name) & set(current_node.inc.Res_name):
+                        continue    # If there are any residues in both exc_i and curent_node.inc, do not create a new node
                     # inc_i = inc_i.append(current_node.inc, ignore_index=True)
                     inc_i = pd.concat([inc_i, current_node.inc], ignore_index=True)
                     inc_i = inc_i.drop_duplicates()
@@ -1506,6 +1520,9 @@ class SNAPS_assigner:
                 # Set up excluded resiudes
                 exc_i = inc_exc[1]
                 if current_node.exc is not None:
+                    # Check if any of the force-included residues for this new node are also excluded
+                    # if set(inc_i.Res_name) & set(current_node.exc.Res_name):
+                    #     continue
                     # exc_i = exc_i.append(current_node.exc, ignore_index=True)
                     exc_i = pd.concat([exc_i, current_node.exc], ignore_index=True)
                 
@@ -1524,11 +1541,21 @@ class SNAPS_assigner:
                     # Create a new child node and add to unranked_nodes
                     matching_i.index = matching_i["Res_name"]
                     matching_i.index.name = None
-                    node_i = Node(self.calc_overall_matching_prob(matching_i),
-                                  matching_i, inc_i, exc_i)
-                    unranked_nodes.add(node_i)
+                    # node_i = Node(self.calc_overall_matching_prob(matching_i),
+                    #               matching_i, inc_i, exc_i)
+                    # unranked_nodes.add(node_i)
+                    tmp = {"ID": node_df.ID.max()+1, 
+                        "sum_log_prob": self.calc_overall_matching_prob(matching_i), 
+                        "matching": matching_i,
+                        "inc": inc_i, "exc": exc_i,
+                        "Ranked": False}
+                    # breakpoint()
+                    node_df = pd.concat([node_df, pd.DataFrame([tmp])], ignore_index=True)  
+                    
                 
-            ranked_nodes.add(current_node)
+            # ranked_nodes.add(current_node)
+            node_df.loc[next_best_node_index, "Ranked"] = True
+            node_df = node_df.sort_values("sum_log_prob", ascending=False)
 
             if worst_mismatch < threshold:
                 break   # If the worst mismatch in current assignment is less than the threshold, stop searching.
@@ -1536,9 +1563,9 @@ class SNAPS_assigner:
             iterations += 1
             if iterations >= max_iterations:
                 break
-            breakpoint()
+            # breakpoint()
         breakpoint()
-        return(ranked_nodes, unranked_nodes)
+        return(node_df)
 
         # assign_df0 = self.assign_from_preds()
         # best_assign_df = assign_df0
