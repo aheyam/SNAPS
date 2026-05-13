@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import norm, multivariate_normal, linregress
 from Bio.SeqUtils import seq1
+import plotnine
 from plotnine import *
 from plotnine.ggplot import save_as_pdf_pages
 from pathlib import Path
@@ -295,7 +296,7 @@ for i in testset_df.ID:
     obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
 
     # Convert wide to long
-    obs = obs.melt(id_vars=["SS_name", "Res_N", "Res_type"],
+    obs = obs.melt(id_vars=["SS_name", "Res_N", "Res_type", "Res_type_m1"],
                    value_vars=set(obs.columns).intersection(atom_set), 
                    var_name="Atom_type", value_name="Shift")
     
@@ -307,7 +308,7 @@ for i in testset_df.ID:
         obs_all = pd.concat([obs_all, obs], ignore_index=True)
     
 # Import all predicted shifts
-preds_all = None
+preds_shiftx2 = None
 for i in testset_df["ID"]:
     preds = import_pred_shifts(testset_df.loc[i, "preds_file"], 
                                         filetype="shiftx2")
@@ -326,10 +327,10 @@ for i in testset_df["ID"]:
     
     preds["ID"] = i
 
-    if preds_all is None:
-        preds_all = preds.copy()
+    if preds_shiftx2 is None:
+        preds_shiftx2 = preds.copy()
     else:
-        preds_all = pd.concat([preds_all, preds], ignore_index=True)
+        preds_shiftx2 = pd.concat([preds_shiftx2, preds], ignore_index=True)
 
 # Analyse the overall distribution of the real shifts
 i_atoms = {"H","N","HA","C","CA","CB"}
@@ -346,7 +347,115 @@ obs_dist_plot += scale_x_reverse()
 obs_dist_plot += ggtitle("Distribution of chemical shifts for all atom types in ShiftX2 testset")
 obs_dist_plot.save(path/"plots/error_dist/observed shift distribution.pdf", height=200, width=200, units="mm")
 
+# plt = ggplot(obs_all[obs_all.Atom_type.isin(i_atoms)], aes(y="Shift")) + geom_boxplot() 
+# plt += facet_wrap("Atom_type", scales="free")
+# plt += coord_flip()
+# plt.save(path/"plots/error_dist/observed shift boxplot.pdf", height=200, width=200, units="mm")
+
 # Analyse the error distribution of each set of predicted shifts
+comparison_dict = {"shiftx2":[obs_all, preds_shiftx2]}
+comparison_list = [[obs_all, preds_shiftx2]]
+
+for out_dir in comparison_dict:
+    obs = comparison_dict[out_dir][0]
+    preds = comparison_dict[out_dir][1]
+
+    (path/"plots/error_dist"/out_dir).mkdir(parents=True, exist_ok=True)   # Make output directory
+
+    # Merge the obs and preds dataframes, and clean up
+    df = pd.merge(obs, preds, on=["ID","Res_N","Res_type", "Res_type_m1", "Atom_type"], 
+                how="outer", suffixes=["_obs","_pred"])
+    df_raw = df.copy()
+    df = df.dropna(subset=["Shift_obs","Shift_pred"])   # Get rid of lines where either obs or preds is missing
+
+    print(df.groupby("Atom_type").count())      # Print a summary of the imported data
+
+    df["Delta"] = df.Shift_pred - df.Shift_obs
+
+    # Plot all predicted vs observed shifts
+    plt = ggplot(df, aes(x="Shift_obs", y="Shift_pred")) + geom_point()
+    plt = plt + facet_wrap("Atom_type", scales="free")
+    plt = plt + scale_x_reverse() + scale_y_reverse()
+    plt.save(path/"plots/error_dist"/out_dir/"predictions vs observations.pdf", height=200, width=200, units="mm")
+
+    # Plot the distribution of observed and predicted shifts
+    plt = ggplot(df) 
+    plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
+    plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
+    plt += facet_wrap("Atom_type", scales="free")
+    plt += scale_x_reverse()
+    plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
+    plt.save(path/"plots/error_dist"/out_dir/"predicted shift distribution.pdf", height=200, width=200, units="mm")
+
+    # For each atom type, faceted by residue type...
+    for a in atom_set:
+        limits = [df.loc[df.Atom_type==a,["Shift_obs","Shift_pred"]].max().max(),
+                    df.loc[df.Atom_type==a,["Shift_obs","Shift_pred"]].min().min()]
+        
+        # Plot predicted vs observed shift
+        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Shift_pred", color="Delta")) + geom_point()
+        plt = plt + geom_abline(intercept=0, slope=1)
+        plt = plt + facet_wrap("Res_type")
+        plt = plt + xlim(limits) + ylim(limits) # + scale_x_reverse() + scale_y_reverse() 
+        plt.save(path/"plots/error_dist"/out_dir/("predictions vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        
+        # Plot distributions of observed and predicted shifts
+        plt = ggplot(df[df.Atom_type==a]) 
+        plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
+        plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
+        plt += facet_wrap("Res_type")
+        plt += scale_x_reverse()
+        plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
+        plt.save(path/"plots/error_dist"/out_dir/("predicted shift distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
+
+        # Plot the distribution of errors, compared to the overall distribution of observations
+        plt = ggplot(df[df.Atom_type==a], aes(x="Delta")) + geom_density(fill="red", alpha=0.5)
+        plt = plt + geom_density(aes(x="Shift_obs - Shift_obs.median()"), fill="blue", alpha=0.5)
+        plt = plt + facet_wrap("Res_type")
+        plt = plt + scale_x_reverse()
+        plt = plt + ggtitle("Error distribution (red) compared to observed shift distribution (blue)")
+        plt.save(path/"plots/error_dist"/out_dir/("error distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        # I would like to plot the istribution of observed shifts exactly over the error distribution, but haven't found a way
+        
+        # Plot the prediction error vs observed shift
+        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Delta", color="Shift_pred")) + geom_point()
+        plt = plt + facet_wrap("Res_type", scales="free")
+        plt = plt + scale_x_reverse()
+        plt.save(path/"plots/error_dist"/out_dir/("delta vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        
+        # Plot the prediction error vs predicted shift
+        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_pred", y="Delta", color="Shift_obs")) + geom_point()
+        plt = plt + facet_wrap("Res_type", scales="free")
+        plt = plt + scale_x_reverse()
+        plt.save(path/"plots/error_dist"/out_dir/("delta vs predictions by residue - "+a+".pdf"), height=200, width=200, units="mm")
+
+    ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
+    df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
+                                            # (ie the i-1 residue type for the i-1 atoms)
+    mask = df.Atom_type.isin(["C_m1,CA_m1,CB_m1"])
+    df.loc[mask, "Res_type_atom"] = df.loc[mask, "Res_type_m1"]
+
+    df["Delta_cor"] = np.nan
+    lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
+
+    for atom in atom_set:
+        for res in df["Res_type_atom"].unique():
+            mask = (df["Atom_type"]==atom) & (df["Res_type_atom"]==res)
+            tmp = df.loc[mask, ["Shift_obs", "Shift_pred"]].dropna(how="any")
+            try:
+                lm = linregress(tmp["Shift_obs"], tmp["Shift_pred"])
+                corr_coeff = tmp.corr().iloc[0,1]
+                lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
+                # df.loc[mask,"Shift_pred_cor"] = (df.loc[mask,"Shift_pred"] 
+                #                                 - lm[0]*df.loc[mask,"Shift_pred"]
+                #                                 - lm[1])
+                # df.loc[mask,"Delta_cor"] = (df.loc[mask,"Shift_pred_cor"] - 
+                #                             df.loc[mask,"Shift_pred"])
+            except:
+                print("Error: ",res, atom)
+
+
+    # Plot the distribution of corrected predictions and original predictions
 
 
 # Compare the errors from different prediction methods
