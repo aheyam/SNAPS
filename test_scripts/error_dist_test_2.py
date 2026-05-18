@@ -354,7 +354,6 @@ obs_dist_plot.save(path/"plots/error_dist/observed shift distribution.pdf", heig
 
 # Analyse the error distribution of each set of predicted shifts
 comparison_dict = {"shiftx2":[obs_all, preds_shiftx2]}
-comparison_list = [[obs_all, preds_shiftx2]]
 
 for out_dir in comparison_dict:
     obs = comparison_dict[out_dir][0]
@@ -407,7 +406,7 @@ for out_dir in comparison_dict:
         plt += scale_x_reverse()
         plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
         plt.save(path/"plots/error_dist"/out_dir/("predicted shift distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
-
+        
         # Plot the distribution of errors, compared to the overall distribution of observations
         plt = ggplot(df[df.Atom_type==a], aes(x="Delta")) + geom_density(fill="red", alpha=0.5)
         plt = plt + geom_density(aes(x="Shift_obs - Shift_obs.median()"), fill="blue", alpha=0.5)
@@ -419,15 +418,38 @@ for out_dir in comparison_dict:
         
         # Plot the prediction error vs observed shift
         plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Delta", color="Shift_pred")) + geom_point()
-        plt = plt + facet_wrap("Res_type", scales="free")
+        plt = plt + stat_smooth(method="lm")
+        plt = plt + facet_wrap("Res_type")  # , scales="free")
         plt = plt + scale_x_reverse()
         plt.save(path/"plots/error_dist"/out_dir/("delta vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
         # Plot the prediction error vs predicted shift
         plt = ggplot(df[df.Atom_type==a], aes(x="Shift_pred", y="Delta", color="Shift_obs")) + geom_point()
-        plt = plt + facet_wrap("Res_type", scales="free")
+        plt = plt + stat_smooth(method="lm")
+        plt = plt + facet_wrap("Res_type")  # , scales="free")
         plt = plt + scale_x_reverse()
         plt.save(path/"plots/error_dist"/out_dir/("delta vs predictions by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        
+    ## Calculate correlation between different errors
+    df["ID_Res"] = df.ID + "_" + df.Res_name
+    delta_wide = df.pivot(index="ID_Res", columns="Atom_type", values="Delta")
+
+    # Output the mean and covariance to .csv files (Can be used with the delta_correlation option in SNAPS config file)
+    delta_wide.mean().to_csv(path/"output"/"error_dist"/(out_dir+"_d_mean.csv"))
+    delta_wide.cov().to_csv(path/"output"/"error_dist"/(out_dir+"_d_cov.csv"))
+    correlation = delta_wide.corr()
+
+    # Plot the correlation between each 
+    atoms = list(i_atoms)
+    N = len(atoms)
+    for i in range(N):
+        for j in range(i+1,N):
+            plt = ggplot(delta_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
+            plt = plt + stat_smooth(method="lm")
+            plt = plt + ggtitle("Correlation between prediction errors for atoms "+atoms[i]+" and "+atoms[j]+f". r = {correlation.loc[atoms[i], atoms[j]]:.2f}")
+            plt = plt + scale_x_reverse() + scale_y_reverse()
+            plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
+    # CA has biggish correlations with N and HA, but the other correlations are all <= 0.1
 
     ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
     df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
@@ -457,5 +479,6 @@ for out_dir in comparison_dict:
 
     # Plot the distribution of corrected predictions and original predictions
 
+    
 
 # Compare the errors from different prediction methods
