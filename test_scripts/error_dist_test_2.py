@@ -438,9 +438,10 @@ for out_dir in comparison_dict:
     delta_wide.mean().to_csv(path/"output"/"error_dist"/(out_dir+"_d_mean.csv"))
     delta_wide.cov().to_csv(path/"output"/"error_dist"/(out_dir+"_d_cov.csv"))
     correlation = delta_wide.corr()
+    correlation.to_csv(path/"output"/"error_dist"/(out_dir+"_d_corr.csv"))
 
     # Plot the correlation between each 
-    atoms = list(i_atoms)
+    atoms = list(atom_set)
     N = len(atoms)
     for i in range(N):
         for j in range(i+1,N):
@@ -449,7 +450,6 @@ for out_dir in comparison_dict:
             plt = plt + ggtitle("Correlation between prediction errors for atoms "+atoms[i]+" and "+atoms[j]+f". r = {correlation.loc[atoms[i], atoms[j]]:.2f}")
             plt = plt + scale_x_reverse() + scale_y_reverse()
             plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
-    # CA has biggish correlations with N and HA, but the other correlations are all <= 0.1
 
     ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
     df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
