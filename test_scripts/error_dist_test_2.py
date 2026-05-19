@@ -352,6 +352,22 @@ obs_dist_plot.save(path/"plots/error_dist/observed shift distribution.pdf", heig
 # plt += coord_flip()
 # plt.save(path/"plots/error_dist/observed shift boxplot.pdf", height=200, width=200, units="mm")
 
+# Plot correlation between different shifts
+obs_all["ID_SS"] = obs_all.ID + "_" + obs_all.SS_name
+obs_all_wide = obs_all.pivot(index="ID_SS", columns="Atom_type", values="Shift")
+obs_correlation = obs_all_wide.corr()
+obs_correlation.to_csv(path/"output"/"error_dist"/"Observed shift correlation.csv")
+
+atoms = list(atom_set)
+N = len(atoms)
+for i in range(N):
+    for j in range(i+1,N):
+        plt = ggplot(obs_all_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
+        plt = plt + stat_smooth(method="lm")
+        plt = plt + ggtitle("Correlation between observed shifts for atoms "+atoms[i]+" and "+atoms[j]+f". r = {obs_correlation.loc[atoms[i], atoms[j]]:.2f}")
+        plt = plt + scale_x_reverse() + scale_y_reverse()
+        plt.save(path/"plots/error_dist"/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
+
 # Analyse the error distribution of each set of predicted shifts
 comparison_dict = {"shiftx2":[obs_all, preds_shiftx2]}
 
@@ -407,15 +423,20 @@ for out_dir in comparison_dict:
         plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
         plt.save(path/"plots/error_dist"/out_dir/("predicted shift distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
-        # Plot the distribution of errors, compared to the overall distribution of observations
-        plt = ggplot(df[df.Atom_type==a], aes(x="Delta")) + geom_density(fill="red", alpha=0.5)
-        plt = plt + geom_density(aes(x="Shift_obs - Shift_obs.median()"), fill="blue", alpha=0.5)
-        plt = plt + facet_wrap("Res_type")
-        plt = plt + scale_x_reverse()
-        plt = plt + ggtitle("Error distribution (red) compared to observed shift distribution (blue)")
+        # # Plot the distribution of errors, compared to the overall distribution of observations
+        # plt = ggplot(df[df.Atom_type==a], aes(x="Delta")) + geom_density(fill="red", alpha=0.5)
+        # plt = plt + geom_density(aes(x="Shift_obs - Shift_obs.median()"), fill="blue", alpha=0.5)
+        # plt = plt + facet_wrap("Res_type")
+        # plt = plt + scale_x_reverse()
+        # plt = plt + ggtitle("Error distribution (red) compared to observed shift distribution (blue)")
+        # plt.save(path/"plots/error_dist"/out_dir/("error distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        # # I would like to plot the istribution of observed shifts exactly over the error distribution, but haven't found a way
+
+        # Plot overlay of error distributions of each residue type
+        plt = ggplot(df[df.Atom_type==a]) + geom_density(aes(x="Delta", color="Res_type"))
+        plt = plt + ggtitle("Error distributions for each residue type for atom "+a)
         plt.save(path/"plots/error_dist"/out_dir/("error distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
-        # I would like to plot the istribution of observed shifts exactly over the error distribution, but haven't found a way
-        
+
         # Plot the prediction error vs observed shift
         plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Delta", color="Shift_pred")) + geom_point()
         plt = plt + stat_smooth(method="lm")
@@ -440,7 +461,15 @@ for out_dir in comparison_dict:
     correlation = delta_wide.corr()
     correlation.to_csv(path/"output"/"error_dist"/(out_dir+"_d_corr.csv"))
 
-    # Plot the correlation between each 
+    # Work out covariance for each residue type, in case it is very different.
+    delta_wide_res = {}
+    correlation_res = {}
+    for r in df.Res_type.unique():
+        delta_wide_res[r] = df[df.Res_type==r].pivot(index="ID_Res", columns="Atom_type", values="Delta")
+        correlation_res[r] = delta_wide_res[r].corr()
+        (correlation_res[r]-correlation).to_csv(path/"output"/"error_dist"/(out_dir+" difference in correlation matrix for residue "+r+".csv"))
+
+    # Plot the correlation between errors for each atom type
     atoms = list(atom_set)
     N = len(atoms)
     for i in range(N):
@@ -451,33 +480,42 @@ for out_dir in comparison_dict:
             plt = plt + scale_x_reverse() + scale_y_reverse()
             plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
 
-    ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
-    df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
-                                            # (ie the i-1 residue type for the i-1 atoms)
-    mask = df.Atom_type.isin(["C_m1,CA_m1,CB_m1"])
-    df.loc[mask, "Res_type_atom"] = df.loc[mask, "Res_type_m1"]
-
-    df["Delta_cor"] = np.nan
-    lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
-
-    for atom in atom_set:
-        for res in df["Res_type_atom"].unique():
-            mask = (df["Atom_type"]==atom) & (df["Res_type_atom"]==res)
-            tmp = df.loc[mask, ["Shift_obs", "Shift_pred"]].dropna(how="any")
-            try:
-                lm = linregress(tmp["Shift_obs"], tmp["Shift_pred"])
-                corr_coeff = tmp.corr().iloc[0,1]
-                lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
-                # df.loc[mask,"Shift_pred_cor"] = (df.loc[mask,"Shift_pred"] 
-                #                                 - lm[0]*df.loc[mask,"Shift_pred"]
-                #                                 - lm[1])
-                # df.loc[mask,"Delta_cor"] = (df.loc[mask,"Shift_pred_cor"] - 
-                #                             df.loc[mask,"Shift_pred"])
-            except:
-                print("Error: ",res, atom)
+    # Output the standard deviation of the error for each atom type and residue
+    tmp = df.groupby("Atom_type").Delta
+    tmp.std().to_csv(path/"output"/"error_dist"/(out_dir+" standard deviation of prediction error (by atom type).csv"))
+    (tmp.quantile(0.75) - tmp.quantile(0.25)).to_csv(path/"output"/"error_dist"/(out_dir+" IQR of prediction error (by atom type).csv"))
+    tmp2 = df.groupby(["Atom_type","Res_type"]).Delta
+    tmp2.std().to_csv(path/"output"/"error_dist"/(out_dir+" standard deviation of prediction error (by atom and residue type).csv"))
+    (tmp2.quantile(0.75) - tmp2.quantile(0.25)).to_csv(path/"output"/"error_dist"/(out_dir+" IQR of prediction error (by atom and residue type).csv"))
 
 
-    # Plot the distribution of corrected predictions and original predictions
+    # ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
+    # df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
+    #                                         # (ie the i-1 residue type for the i-1 atoms)
+    # mask = df.Atom_type.isin(["C_m1,CA_m1,CB_m1"])
+    # df.loc[mask, "Res_type_atom"] = df.loc[mask, "Res_type_m1"]
+
+    # df["Delta_cor"] = np.nan
+    # lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
+
+    # for atom in atom_set:
+    #     for res in df["Res_type_atom"].unique():
+    #         mask = (df["Atom_type"]==atom) & (df["Res_type_atom"]==res)
+    #         tmp = df.loc[mask, ["Shift_obs", "Shift_pred"]].dropna(how="any")
+    #         try:
+    #             lm = linregress(tmp["Shift_obs"], tmp["Shift_pred"])
+    #             corr_coeff = tmp.corr().iloc[0,1]
+    #             lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
+    #             # df.loc[mask,"Shift_pred_cor"] = (df.loc[mask,"Shift_pred"] 
+    #             #                                 - lm[0]*df.loc[mask,"Shift_pred"]
+    #             #                                 - lm[1])
+    #             # df.loc[mask,"Delta_cor"] = (df.loc[mask,"Shift_pred_cor"] - 
+    #             #                             df.loc[mask,"Shift_pred"])
+    #         except:
+    #             print("Error: ",res, atom)
+
+
+    # # Plot the distribution of corrected predictions and original predictions
 
     
 
