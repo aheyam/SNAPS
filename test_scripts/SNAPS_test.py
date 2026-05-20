@@ -99,9 +99,9 @@ def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
     """Extra_args is a list of additional command line arguments"""
     print(out_dir, ":", id)
     cmd = [args.python_cmd, (path/"python/SNAPS.py").as_posix(),
-            testset_df.loc[id, "obs_file"].as_posix(),
-            testset_df.loc[id, "preds_file"].as_posix(),
-            (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".txt")).as_posix(),
+            "--shift_file", testset_df.loc[id, "obs_file"].as_posix(),
+            "--pred_file", testset_df.loc[id, "preds_file"].as_posix(),
+            "--output_file", (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".txt")).as_posix(),
             "--shift_type", "test",
             "--pred_type", "shiftx2",
             "-c", (path/"config"/config_file).as_posix(),

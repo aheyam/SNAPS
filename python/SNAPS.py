@@ -20,11 +20,11 @@ def get_arguments(system_args):
             description="SNAPS (Simple NMR Assignments from Predicted Shifts)")
 
     # Mandatory arguments
-    parser.add_argument("shift_file",
+    parser.add_argument("--shift_file", required=True,
                         help="A table of observed chemical shifts.")
-    parser.add_argument("pred_file",
-                        help="A table of predicted chemical shifts.")
-    parser.add_argument("output_file",
+    parser.add_argument("--pred_file", nargs="+", required=True,
+                        help="One or more files containing a table of predicted chemical shifts.")
+    parser.add_argument("--output_file", required=True,
                         help="The file results will be written to.")
 
     # Information on input files and configuration options
@@ -33,13 +33,19 @@ def get_arguments(system_args):
                                  "xeasy", "nmrpipe", "nef", "test"],
                         default="snaps", 
                         help="The format of the observed shift file.")
-    parser.add_argument("--pred_type",
+    parser.add_argument("--pred_type", nargs="+",
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2",
-                        help="The format of the predicted shifts")
-    parser.add_argument("--pred_seq_offset", type=int, default=0,
+                        help="""The format of the predicted shifts. If there are multiple 
+                        prediction files, you can provide a single type, or a list of types""")
+    parser.add_argument("--pred_seq_offset", nargs="+", type=int, default=[0],
                         help="""An offset to apply to the residue numbering in
-                        the predicted shifts.""")
+                        the predicted shifts. If there are multiple prediction files, you can supply 
+                        a single value or a list.""")
+    parser.add_argument("--pred_weights", nargs="+", type=float, default=[1.0], 
+                        help="""If there are multiple predictions files, you can specify what relative 
+                        weight each is given. Weights are normalised, so do not have to sum to 1. If no 
+                        weights are given, all will be weighted equally.""")
     parser.add_argument("-c", "--config_file",
                         default="../config/config.txt",
                         help="A file containing parameters for the analysis.")
@@ -163,7 +169,7 @@ def runSNAPS(system_args):
 
         a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
     else:
-        a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
+        a.import_pred_shifts(args.pred_file[0], args.pred_type[0], args.pred_seq_offset[0])
 
     #### Do the analysis
     a.prepare_obs_preds()

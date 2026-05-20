@@ -368,6 +368,12 @@ for i in range(N):
         plt = plt + scale_x_reverse() + scale_y_reverse()
         plt.save(path/"plots/error_dist"/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
 
+# Output the mean and standard deviation observed shift for each atom and residue type
+average_shifts = pd.DataFrame({"Mean_shift":obs_all.groupby(["Atom_type","Res_type"]).Shift.mean(), 
+                               "Stdev":obs_all.groupby(["Atom_type","Res_type"]).Shift.std()})
+average_shifts.to_csv(path/"output"/"error_dist"/"average_shifts_per_atom_residue.csv")
+
+
 # Analyse the error distribution of each set of predicted shifts
 comparison_dict = {"shiftx2":[obs_all, preds_shiftx2]}
 
