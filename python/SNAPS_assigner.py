@@ -59,6 +59,7 @@ class SNAPS_assigner:
     def __init__(self):
         self.obs = None
         self.preds = None
+        self.pred_list = None
         self.seq_df = None
         self.all_preds = None
         self.log_prob_matrix = None
@@ -207,7 +208,180 @@ class SNAPS_assigner:
 
         return(self.seq_df)
 
-    def import_pred_shifts(self, filename, filetype, offset=0):
+    def import_pred_shifts(self, filename, filetype=["shiftx2"], offset=[0]):
+        """Import one or more predicted shift files, in ShiftX2 or Sparta+ format.
+        Also make sure residue naming is consistent between predictions and with sequence.
+        
+        Parameters:
+        filename: one or more filenames containing predicted shifts
+        filetype: one or more formats for the predicted shifts ("shiftx2" or "sparta+").
+        offset: an optional integer to add to the residue numbering in the predictions file.
+        Note: if only a single value is provided for filetype or offset, it will be applied for 
+        all filenames
+
+        Returns
+        A list of data frames containing the predicted shifts"""
+
+        # Check whether arguments are strings or lists, and covert to lists if needed   
+        if type(filename) is str:
+            filename = [filename]
+
+        N = len(filename)   # The number of prediction lists to import
+        
+
+        if type(filetype) is str:
+            filetype = [filetype]
+        if len(filetype) != N:  # If number of filetypes != number of filenames, use first filetype for all
+            filetype = [filetype[0]] * N
+            self.logger.warning(
+                "Number of prediction filetypes not equal to number of prediction filenames:"
+                "using first filetype for all files")
+        
+        if type(offset) is int:
+            offset = [offset]
+        if len(offset) != N:  # If number of filetypes != number of filenames, use first filetype for all
+            offset = [offset[0]] * N
+            self.logger.warning(
+                "Number of prediction offsets not equal to number of prediction filenames:"+ 
+                "using first offset for all files")
+
+        # Start by importing the predicted shifts
+        preds_list = []
+        for i in range(N):
+            #### Import the raw predicted shifts
+            if filetype[i] == "shiftx2":
+                preds_long = pd.read_csv(filename[i])
+                if any(preds_long.columns == "CHAIN"):
+                    if len(preds_long["CHAIN"].unique())>1:
+                        self.logger.warning(filename[i]+
+                                """: Chain identifier dropped - if multiple chains are
+                                present in the predictions, they will be merged.""")
+                    preds_long = preds_long.drop("CHAIN", axis=1)
+                preds_long = preds_long.reindex(columns=["NUM","RES","ATOMNAME",
+                                                        "SHIFT"])
+                preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+            elif filetype[i] == "sparta+":
+                # Work out where the column names and data are
+                with open(filename[i], 'r') as f:
+                    for num, line in enumerate(f, 1):
+                        if line.find("VARS")>-1:
+                            colnames_line = num
+                            colnames = line.split()[1:]
+                            break
+
+                preds_long = pd.read_table(filename[i], sep="\s+", names=colnames,
+                                        skiprows=colnames_line+1)
+                preds_long = preds_long.reindex(columns=["RESID","RESNAME",
+                                                        "ATOMNAME","SHIFT"])
+                preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+
+                # Sparta+ uses HN for backbone amide proton - convert to H
+                preds_long.loc[preds_long["Atom_type"]=="HN", "Atom_type"] = "H"
+            else:
+                self.logger.error("""Invalid predicted shift type: '%s'. Allowed
+                                options are 'shiftx2' or 'sparta+'""" % (filetype))
+                return(None)
+
+            self.logger.info("Imported %d predicted chemical shifts from %s"
+                            % (len(preds_long.index), filename))
+            
+            #### Initial processing and conversion from long to wide
+            # Add sequence number offset and create residue names
+            preds_long["Res_N"] = preds_long["Res_N"] + offset[i]
+            
+            # Don't create Res_name yet - that will be done after combining with the sequence
+            # preds_long.insert(1, "Res_name", (preds_long["Res_N"].astype(str) +
+            #         preds_long["Res_type"]))
+            # # Left pad with spaces to a constant length (helps with sorting)
+            # preds_long["Res_name"] = preds_long["Res_name"].str.rjust(5)
+
+            # Convert from long to wide format
+            preds_wide = preds_long.pivot(index="Res_N", columns="Atom_type",
+                                    values="Shift")
+            preds_wide.index.name = None
+
+            # Add the residue type back in
+            tmp = preds_long[["Res_N","Res_type"]]
+            tmp = tmp.drop_duplicates(subset="Res_N")
+            tmp.index = tmp["Res_N"]
+            tmp.index.name = None
+            preds_wide = pd.concat([tmp, preds_wide], axis=1)
+            
+            preds_list += [preds_wide]
+
+        # Check whether a sequence was imported previously
+        seq_df = self.seq_df
+    
+        if seq_df is None:  # If no sequence was imported previously, create a consensus sequence
+            res_N_min = min([df.Res_N.min() for df in preds_list])
+            res_N_max = max([df.Res_N.max() for df in preds_list])
+            
+            seq_df_0 = pd.DataFrame({"Res_N": range(res_N_min, res_N_max+1)})
+            seq_df_list = []
+            for i in range(N):      # First align all predictions to total residue range
+                seq_df_i = pd.merge(seq_df_0, preds_list[i].loc[:,["Res_N","Res_type"]], 
+                                    how="left", on="Res_N")
+                seq_df_list += [seq_df_i]
+            seq_df = seq_df_list[0]
+            for i in range(N-1):
+                # Find the rows where the sequences don't match    
+                mismatch_mask = seq_df["Res_type"] != seq_df_list[i+1]["Res_type"]
+                na_mask = seq_df["Res_type"].isna()
+                # For mismatches where seq_df has NA Res_type, take the residue type from the current prediction
+                seq_df.loc[(mismatch_mask & na_mask), "Res_type"] = seq_df_list[i+1].loc[(mismatch_mask & na_mask), "Res_type"]
+                # For mismatches where seq_df already has a Res_type, set Res_type to X
+                seq_df.loc[(mismatch_mask & ~na_mask), "Res_type"] = "X"
+            
+            seq_df.Res_type = seq_df.Res_type.fillna("X")     # Set any remaining NAs to X
+
+            # Create the residue name, with padding to constant length (for sorting)
+            seq_df["Res_name"] = seq_df["Res_N"].astype(str) + seq_df["Res_type"]
+            seq_df["Res_name"] = seq_df["Res_name"].str.rjust(5)
+
+            self.seq_df = seq_df
+
+            self.logger.info("No sequence given, so generated sequence from %i to %i using predictions" % (res_N_min,res_N_max))
+            self.logger.info("%i residues have unknown/inconsistent type" % (seq_df.Res_type=="X").sum())
+
+        # Align all predictions to the sequence
+        for i in range(N):
+            preds_list[i] = pd.merge(seq_df.loc[:,["Res_name","Res_N"]], 
+                                     preds_list[i], on="Res_N", how="left")
+        
+        # Add the i-1 and i+1 information
+        for i in range(N):
+            # Make columns for the i-1 predicted shifts of C, CA and CB
+            preds_m1 = preds_list[i][list({"C","CA","CB","Res_type","Res_name"}.
+                                intersection(preds_list[i].columns))].copy()
+            preds_m1.index = preds_m1.index+1
+            preds_m1.columns = preds_m1.columns + "_m1"
+            preds_list[i] = pd.merge(preds_list[i], preds_m1, how="left",
+                            left_index=True, right_index=True)
+
+            # Make column for the i+1 Res_name
+            preds_p1 = preds_list[i][["Res_name"]].copy()
+            preds_p1.index = preds_p1.index-1
+            preds_p1.columns = ["Res_name_p1"]
+            preds_list[i] = pd.merge(preds_list[i], preds_p1, how="left",
+                            left_index=True, right_index=True)
+
+            # Set index to Res_name
+            preds_list[i].index = preds_list[i]["Res_name"]
+            preds_list[i].index.name = None
+
+            # Restrict to only certain atom types
+            atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+            preds_list[i] = preds_list[i][["Res_name","Res_N","Res_type","Res_name_m1",
+                        "Res_name_p1","Res_type_m1"]+
+                        list(atom_set.intersection(preds_list[i].columns))]
+        
+        self.logger.info("Finished reading in %i lists of predicted shifts" % len(preds_list))
+
+        preds = preds_list
+        self.preds = preds
+        return(preds)
+    
+    def import_pred_shifts_old(self, filename, filetype, offset=0):
         """ Import predicted chemical shifts from a ShiftX2 results file.
 
         Returns

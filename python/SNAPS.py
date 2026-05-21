@@ -96,9 +96,9 @@ def get_arguments(system_args):
 
     args = parser.parse_args(system_args)
     if args.test:   # For convenience when testing
-        args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
-                                  "data/P3a_L273R/shiftx2.cs",
-                                  "output/test.txt",
+        args = parser.parse_args(("--shift_file", "data/P3a_L273R/naps_shifts.txt",
+                                  "--pred_file", "data/P3a_L273R/shiftx2.cs",
+                                  "--output_file", "output/test.txt",
                                   "--shift_type","snaps",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",
@@ -171,6 +171,10 @@ def runSNAPS(system_args):
     else:
         a.import_pred_shifts(args.pred_file[0], args.pred_type[0], args.pred_seq_offset[0])
 
+    a.preds_list = a.preds
+    a.preds = a.preds[0]
+    # breakpoint()
+
     #### Do the analysis
     a.prepare_obs_preds()
     a.calc_log_prob_matrix()
@@ -187,8 +191,8 @@ def runSNAPS(system_args):
             else:
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
-    if args.test:
-        a.find_consistent_assignments_3(verbose=True)
+    # if args.test:
+    #     a.find_consistent_assignments_3(verbose=True)
     
     #### Output the results
     
