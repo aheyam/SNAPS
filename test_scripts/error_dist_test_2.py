@@ -268,6 +268,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("SNAPS_path", help="Path to the top-level SNAPS directory.")
 parser.add_argument("-p", "--python_cmd", default="python")
 parser.add_argument("-N", default=None, help="Limit to first N datasets.")
+parser.add_argument("--plot", action="store_true", help="Output plots (if omitted, will only do calculations)")
 args = parser.parse_args()
 
 # path = Path("C:/Users/alexh/GitHub/SNAPS/")
@@ -276,9 +277,21 @@ path = Path(args.SNAPS_path)
 # Import information on the ShiftX2 testset
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 
                            names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df["Included"] = True
+# Also import testset proteins that will eventually be excluded from the analysis
+testset_df_excluded = pd.read_table(path/"data/testset/testset_excluded.txt", header=None, 
+                           names=["ID","PDB","BMRB","Resolution","Length"])
+testset_df_excluded["Included"] = False
+testset_df = pd.concat([testset_df, testset_df_excluded], ignore_index=True)
+excluded_IDs = testset_df_excluded.ID
+
 testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file 
                       for file in testset_df["BMRB"].astype(str)+".txt"]
-testset_df["preds_file"] = [path/"data/testset/shiftx2_results"/file 
+testset_df["shiftx2_file"] = [path/"data/testset/shiftx2_results"/file 
+                      for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
+testset_df["noshifty_file"] = [path/"data/testset/noshifty_results"/file 
+                      for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
+testset_df["sparta_file"] = [path/"data/testset/sparta+_predictions"/file 
                       for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df.index = testset_df["ID"]
 
@@ -310,7 +323,7 @@ for i in testset_df.ID:
 # Import all predicted shifts
 preds_shiftx2 = None
 for i in testset_df["ID"]:
-    preds = import_pred_shifts(testset_df.loc[i, "preds_file"], 
+    preds = import_pred_shifts(testset_df.loc[i, "shiftx2_file"], 
                                         filetype="shiftx2")
     
     #Change Bs to Cs
@@ -332,20 +345,68 @@ for i in testset_df["ID"]:
     else:
         preds_shiftx2 = pd.concat([preds_shiftx2, preds], ignore_index=True)
 
+preds_noshifty = None
+for i in testset_df["ID"]:
+    preds = import_pred_shifts(testset_df.loc[i, "noshifty_file"], 
+                                        filetype="shiftx2")
+    
+    #Change Bs to Cs
+    preds.loc[preds["Res_type"]=="B", "Res_name"] = (
+            preds.loc[preds["Res_type"]=="B", "Res_name"].str.replace("B","C"))
+    preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_type_m1"]=="B", "Res_type_m1"] = "C"
+    
+
+    #Convert wide to long
+    preds = preds.melt(id_vars=["Res_name", "Res_N", "Res_type", "Res_type_m1"],
+                   value_vars=set(preds.columns).intersection(atom_set), 
+                   var_name="Atom_type", value_name="Shift")
+    
+    preds["ID"] = i
+
+    if preds_noshifty is None:
+        preds_noshifty = preds.copy()
+    else:
+        preds_noshifty = pd.concat([preds_noshifty, preds], ignore_index=True)
+
+preds_sparta = None
+for i in testset_df["ID"]:
+    preds = import_pred_shifts(testset_df.loc[i, "sparta_file"], 
+                                        filetype="sparta+")
+    
+    #Change Bs to Cs
+    preds.loc[preds["Res_type"]=="B", "Res_name"] = (
+            preds.loc[preds["Res_type"]=="B", "Res_name"].str.replace("B","C"))
+    preds.loc[preds["Res_type"]=="B", "Res_type"] = "C"
+    preds.loc[preds["Res_type_m1"]=="B", "Res_type_m1"] = "C"
+    
+
+    #Convert wide to long
+    preds = preds.melt(id_vars=["Res_name", "Res_N", "Res_type", "Res_type_m1"],
+                   value_vars=set(preds.columns).intersection(atom_set), 
+                   var_name="Atom_type", value_name="Shift")
+    
+    preds["ID"] = i
+
+    if preds_sparta is None:
+        preds_sparta = preds.copy()
+    else:
+        preds_sparta = pd.concat([preds_sparta, preds], ignore_index=True)
+
 # Analyse the overall distribution of the real shifts
 i_atoms = {"H","N","HA","C","CA","CB"}
 
 # It would be nice to draw the 2.5% and 97.5% quantiles on the data, but I've not found a way to do that and facet nicely.
 # low_quantiles = obs_all[obs_all.Atom_type.isin(i_atoms)].groupby("Atom_type").Shift.quantile(0.025)
 # high_quantiles = obs_all[obs_all.Atom_type.isin(i_atoms)].groupby("Atom_type").Shift.quantile(0.975)
-
-obs_dist_plot = ggplot(obs_all[obs_all.Atom_type.isin(i_atoms)], aes(x="Shift", fill="Atom_type")) + geom_density()
-obs_dist_plot += facet_wrap("Atom_type", scales="free")
-obs_dist_plot += scale_x_reverse()
-# obs_dist_plot += geom_vline(xintercept=low_quantiles)
-# obs_dist_plot += geom_vline(xintercept=high_quantiles)
-obs_dist_plot += ggtitle("Distribution of chemical shifts for all atom types in ShiftX2 testset")
-obs_dist_plot.save(path/"plots/error_dist/observed shift distribution.pdf", height=200, width=200, units="mm")
+if args.plot:
+    obs_dist_plot = ggplot(obs_all[obs_all.Atom_type.isin(i_atoms)], aes(x="Shift", fill="Atom_type")) + geom_density()
+    obs_dist_plot += facet_wrap("Atom_type", scales="free")
+    obs_dist_plot += scale_x_reverse()
+    # obs_dist_plot += geom_vline(xintercept=low_quantiles)
+    # obs_dist_plot += geom_vline(xintercept=high_quantiles)
+    obs_dist_plot += ggtitle("Distribution of chemical shifts for all atom types in ShiftX2 testset")
+    obs_dist_plot.save(path/"plots/error_dist/observed shift distribution.pdf", height=200, width=200, units="mm")
 
 # plt = ggplot(obs_all[obs_all.Atom_type.isin(i_atoms)], aes(y="Shift")) + geom_boxplot() 
 # plt += facet_wrap("Atom_type", scales="free")
@@ -358,18 +419,21 @@ obs_all_wide = obs_all.pivot(index="ID_SS", columns="Atom_type", values="Shift")
 obs_correlation = obs_all_wide.corr()
 obs_correlation.to_csv(path/"output"/"error_dist"/"Observed shift correlation.csv")
 
-atoms = list(atom_set)
-N = len(atoms)
-for i in range(N):
-    for j in range(i+1,N):
-        plt = ggplot(obs_all_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
-        plt = plt + stat_smooth(method="lm")
-        plt = plt + ggtitle("Correlation between observed shifts for atoms "+atoms[i]+" and "+atoms[j]+f". r = {obs_correlation.loc[atoms[i], atoms[j]]:.2f}")
-        plt = plt + scale_x_reverse() + scale_y_reverse()
-        plt.save(path/"plots/error_dist"/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
+if args.plot:
+    atoms = list(atom_set)
+    N = len(atoms)
+    for i in range(N):
+        for j in range(i+1,N):
+            plt = ggplot(obs_all_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
+            plt = plt + stat_smooth(method="lm")
+            plt = plt + ggtitle("Correlation between observed shifts for atoms "+atoms[i]+" and "+atoms[j]+f". r = {obs_correlation.loc[atoms[i], atoms[j]]:.2f}")
+            plt = plt + scale_x_reverse() + scale_y_reverse()
+            plt.save(path/"plots/error_dist"/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
 
 # Analyse the error distribution of each set of predicted shifts
-comparison_dict = {"shiftx2":[obs_all, preds_shiftx2]}
+comparison_dict = {"shiftx2":[obs_all, preds_shiftx2], "noshifty":[obs_all, preds_noshifty], "sparta":[obs_all, preds_sparta]}
+df_dict = {}
+delta_wide_dict = {}
 
 for out_dir in comparison_dict:
     obs = comparison_dict[out_dir][0]
@@ -383,24 +447,50 @@ for out_dir in comparison_dict:
     df_raw = df.copy()
     df = df.dropna(subset=["Shift_obs","Shift_pred"])   # Get rid of lines where either obs or preds is missing
 
-    print(df.groupby("Atom_type").count())      # Print a summary of the imported data
-
     df["Delta"] = df.Shift_pred - df.Shift_obs
 
+    df_excluded = df[df.ID.isin(excluded_IDs)]
+    df = df[~df.ID.isin(excluded_IDs)]
+
+    print(df.groupby("Atom_type").count())      # Print a summary of the imported data
+    
     # Plot all predicted vs observed shifts
-    plt = ggplot(df, aes(x="Shift_obs", y="Shift_pred")) + geom_point()
-    plt = plt + facet_wrap("Atom_type", scales="free")
-    plt = plt + scale_x_reverse() + scale_y_reverse()
-    plt.save(path/"plots/error_dist"/out_dir/"predictions vs observations.pdf", height=200, width=200, units="mm")
+    if args.plot:
+        plt = ggplot(df, aes(x="Shift_obs", y="Shift_pred")) + geom_point()
+        plt = plt + facet_wrap("Atom_type", scales="free")
+        plt = plt + scale_x_reverse() + scale_y_reverse()
+        plt.save(path/"plots/error_dist"/out_dir/"predictions vs observations.pdf", height=200, width=200, units="mm")
 
     # Plot the distribution of observed and predicted shifts
-    plt = ggplot(df) 
-    plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
-    plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
-    plt += facet_wrap("Atom_type", scales="free")
-    plt += scale_x_reverse()
-    plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
-    plt.save(path/"plots/error_dist"/out_dir/"predicted shift distribution.pdf", height=200, width=200, units="mm")
+    if args.plot:
+        plt = ggplot(df) 
+        plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
+        plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
+        plt += facet_wrap("Atom_type", scales="free")
+        plt += scale_x_reverse()
+        plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
+        plt.save(path/"plots/error_dist"/out_dir/"predicted shift distribution.pdf", height=200, width=200, units="mm")
+
+    # Plot distribution of errors for each testset protein, compared to overall
+    if args.plot:
+        for i in df.ID.unique():
+            plt = ggplot(aes(x="Delta"))
+            plt = plt + geom_density(data=df[df.Atom_type.isin(i_atoms)], color="grey")
+            plt = plt + geom_density(data=df[(df.ID==i) & df.Atom_type.isin(i_atoms)], color="red")
+            plt = plt + facet_wrap("Atom_type", scales="free")
+            plt = plt + ggtitle("Distribution of prediction errors (Delta) for ID "+i)
+            plt.save(path/"plots/error_dist"/out_dir/(i+" error distribution.pdf"), height=200, width=200, units="mm")
+
+    # Plot distribution of errors for each EXCLUDED testset protein, compared to overall
+    if args.plot:
+        for i in df_excluded.ID.unique():
+            plt = ggplot(aes(x="Delta"))
+            plt = plt + geom_density(data=df[df.Atom_type.isin(i_atoms)], color="grey")
+            plt = plt + geom_density(data=df_excluded[(df_excluded.ID==i) & df_excluded.Atom_type.isin(i_atoms)], color="red")
+            plt = plt + facet_wrap("Atom_type", scales="free")
+            plt = plt + ggtitle("Distribution of prediction errors (Delta) for ID "+i)
+            plt.save(path/"plots/error_dist"/out_dir/"excluded"/(i+" error distribution.pdf"), height=200, width=200, units="mm")
+
 
     # For each atom type, faceted by residue type...
     for a in atom_set:
@@ -408,20 +498,22 @@ for out_dir in comparison_dict:
                     df.loc[df.Atom_type==a,["Shift_obs","Shift_pred"]].min().min()]
         
         # Plot predicted vs observed shift
-        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Shift_pred", color="Delta")) + geom_point()
-        plt = plt + geom_abline(intercept=0, slope=1)
-        plt = plt + facet_wrap("Res_type")
-        plt = plt + xlim(limits) + ylim(limits) # + scale_x_reverse() + scale_y_reverse() 
-        plt.save(path/"plots/error_dist"/out_dir/("predictions vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        if args.plot:
+            plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Shift_pred", color="Delta")) + geom_point()
+            plt = plt + geom_abline(intercept=0, slope=1)
+            plt = plt + facet_wrap("Res_type")
+            plt = plt + xlim(limits) + ylim(limits) # + scale_x_reverse() + scale_y_reverse() 
+            plt.save(path/"plots/error_dist"/out_dir/("predictions vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
         # Plot distributions of observed and predicted shifts
-        plt = ggplot(df[df.Atom_type==a]) 
-        plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
-        plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
-        plt += facet_wrap("Res_type")
-        plt += scale_x_reverse()
-        plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
-        plt.save(path/"plots/error_dist"/out_dir/("predicted shift distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        if args.plot:
+            plt = ggplot(df[df.Atom_type==a]) 
+            plt = plt + geom_density(aes(x="Shift_obs"), fill="red", alpha=0.5) 
+            plt = plt + geom_density(aes(x="Shift_pred"), fill="blue", alpha=0.5)
+            plt += facet_wrap("Res_type")
+            plt += scale_x_reverse()
+            plt += ggtitle("Distribution of observed (red) and predicted (blue) chemical shifts")
+            plt.save(path/"plots/error_dist"/out_dir/("predicted shift distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
         # # Plot the distribution of errors, compared to the overall distribution of observations
         # plt = ggplot(df[df.Atom_type==a], aes(x="Delta")) + geom_density(fill="red", alpha=0.5)
@@ -433,27 +525,35 @@ for out_dir in comparison_dict:
         # # I would like to plot the istribution of observed shifts exactly over the error distribution, but haven't found a way
 
         # Plot overlay of error distributions of each residue type
-        plt = ggplot(df[df.Atom_type==a]) + geom_density(aes(x="Delta", color="Res_type"))
-        plt = plt + ggtitle("Error distributions for each residue type for atom "+a)
-        plt.save(path/"plots/error_dist"/out_dir/("error distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        if args.plot:
+            plt = ggplot(df[df.Atom_type==a]) + geom_density(aes(x="Delta", color="Res_type"))
+            plt = plt + ggtitle("Error distributions for each residue type for atom "+a)
+            plt.save(path/"plots/error_dist"/out_dir/("error distribution by residue - "+a+".pdf"), height=200, width=200, units="mm")
 
         # Plot the prediction error vs observed shift
-        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Delta", color="Shift_pred")) + geom_point()
-        plt = plt + stat_smooth(method="lm")
-        plt = plt + facet_wrap("Res_type")  # , scales="free")
-        plt = plt + scale_x_reverse()
-        plt.save(path/"plots/error_dist"/out_dir/("delta vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        if args.plot:
+            plt = ggplot(df[df.Atom_type==a], aes(x="Shift_obs", y="Delta", color="Shift_pred")) + geom_point()
+            plt = plt + stat_smooth(method="lm")
+            plt = plt + facet_wrap("Res_type")  # , scales="free")
+            plt = plt + scale_x_reverse()
+            plt.save(path/"plots/error_dist"/out_dir/("delta vs observations by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
         # Plot the prediction error vs predicted shift
-        plt = ggplot(df[df.Atom_type==a], aes(x="Shift_pred", y="Delta", color="Shift_obs")) + geom_point()
-        plt = plt + stat_smooth(method="lm")
-        plt = plt + facet_wrap("Res_type")  # , scales="free")
-        plt = plt + scale_x_reverse()
-        plt.save(path/"plots/error_dist"/out_dir/("delta vs predictions by residue - "+a+".pdf"), height=200, width=200, units="mm")
+        if args.plot:
+            plt = ggplot(df[df.Atom_type==a], aes(x="Shift_pred", y="Delta", color="Shift_obs")) + geom_point()
+            plt = plt + stat_smooth(method="lm")
+            plt = plt + facet_wrap("Res_type")  # , scales="free")
+            plt = plt + scale_x_reverse()
+            plt.save(path/"plots/error_dist"/out_dir/("delta vs predictions by residue - "+a+".pdf"), height=200, width=200, units="mm")
         
     ## Calculate correlation between different errors
     df["ID_Res"] = df.ID + "_" + df.Res_name
     delta_wide = df.pivot(index="ID_Res", columns="Atom_type", values="Delta")
+
+    # Calculate the standard deviation of Delta for each testset protein
+    tmp = delta_wide.copy()
+    tmp["ID"] = tmp.index.str[0:4]
+    tmp.groupby("ID").std().to_csv(path/"output"/"error_dist"/(out_dir+"_Delta_stdev_by_ID.csv"))
 
     # Output the mean and covariance to .csv files (Can be used with the delta_correlation option in SNAPS config file)
     delta_wide.mean().to_csv(path/"output"/"error_dist"/(out_dir+"_d_mean.csv"))
@@ -474,11 +574,12 @@ for out_dir in comparison_dict:
     N = len(atoms)
     for i in range(N):
         for j in range(i+1,N):
-            plt = ggplot(delta_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
-            plt = plt + stat_smooth(method="lm")
-            plt = plt + ggtitle("Correlation between prediction errors for atoms "+atoms[i]+" and "+atoms[j]+f". r = {correlation.loc[atoms[i], atoms[j]]:.2f}")
-            plt = plt + scale_x_reverse() + scale_y_reverse()
-            plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
+            if args.plot:
+                plt = ggplot(delta_wide, aes(x=atoms[i], y=atoms[j])) + geom_point()
+                plt = plt + stat_smooth(method="lm")
+                plt = plt + ggtitle("Correlation between prediction errors for atoms "+atoms[i]+" and "+atoms[j]+f". r = {correlation.loc[atoms[i], atoms[j]]:.2f}")
+                plt = plt + scale_x_reverse() + scale_y_reverse()
+                plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
 
     # Output the standard deviation of the error for each atom type and residue
     tmp = df.groupby("Atom_type").Delta
@@ -488,35 +589,26 @@ for out_dir in comparison_dict:
     tmp2.std().to_csv(path/"output"/"error_dist"/(out_dir+" standard deviation of prediction error (by atom and residue type).csv"))
     (tmp2.quantile(0.75) - tmp2.quantile(0.25)).to_csv(path/"output"/"error_dist"/(out_dir+" IQR of prediction error (by atom and residue type).csv"))
 
-
-    # ## For each residue and atom type, calculate a linear fit of predicted vs observed shift
-    # df["Res_type_atom"] = df["Res_type"]    # Make a new column with the residue type of the specific atom 
-    #                                         # (ie the i-1 residue type for the i-1 atoms)
-    # mask = df.Atom_type.isin(["C_m1,CA_m1,CB_m1"])
-    # df.loc[mask, "Res_type_atom"] = df.loc[mask, "Res_type_m1"]
-
-    # df["Delta_cor"] = np.nan
-    # lm_results = pd.DataFrame(columns=["Atom_type","Res_type","Grad","Offset","Corr_coeff"])
-
-    # for atom in atom_set:
-    #     for res in df["Res_type_atom"].unique():
-    #         mask = (df["Atom_type"]==atom) & (df["Res_type_atom"]==res)
-    #         tmp = df.loc[mask, ["Shift_obs", "Shift_pred"]].dropna(how="any")
-    #         try:
-    #             lm = linregress(tmp["Shift_obs"], tmp["Shift_pred"])
-    #             corr_coeff = tmp.corr().iloc[0,1]
-    #             lm_results.loc[atom+"_"+res, :] = [atom, res, lm[0], lm[1], corr_coeff]
-    #             # df.loc[mask,"Shift_pred_cor"] = (df.loc[mask,"Shift_pred"] 
-    #             #                                 - lm[0]*df.loc[mask,"Shift_pred"]
-    #             #                                 - lm[1])
-    #             # df.loc[mask,"Delta_cor"] = (df.loc[mask,"Shift_pred_cor"] - 
-    #             #                             df.loc[mask,"Shift_pred"])
-    #         except:
-    #             print("Error: ",res, atom)
-
-
-    # # Plot the distribution of corrected predictions and original predictions
+    df_dict[out_dir] = df
+    delta_wide_dict[out_dir] = delta_wide
 
     
 
 # Compare the errors from different prediction methods
+mask = ["SS_name","Res_N", "Res_name", "Res_type", "Res_type_m1", "Atom_type", "ID", "Shift_obs"]
+comparison_df = pd.merge(df_dict["noshifty"].loc[:,mask+["Delta"]], df_dict["sparta"].loc[:,mask+["Delta"]], how="outer", on=mask, suffixes=["_noshifty","_sparta"])
+
+if args.plot:
+    plt = ggplot(comparison_df) + geom_point(aes(x="Delta_noshifty", y="Delta_sparta"))
+    plt = plt + geom_abline(intercept=0, slope=1)
+    plt = plt + facet_wrap("Atom_type", scales="free")
+    plt = plt + ggtitle("Comparison of no_shifty and Sparta+ prediction errors")
+    plt.save(path/"plots/error_dist"/"Comparison between no_shifty and sparta+ errors (by atom type).pdf")
+
+if args.plot:
+    for i in atoms:
+        plt = ggplot(comparison_df[comparison_df.Atom_type=="N"]) + geom_point(aes(x="Delta_noshifty", y="Delta_sparta", color="Shift_obs"))
+        plt = plt + geom_abline(intercept=0, slope=1)
+        plt = plt + facet_wrap("Res_type", scales="free")
+        plt = plt + ggtitle("Comparison of no_shifty and Sparta+ prediction errors for atom "+i)
+        plt.save(path/"plots/error_dist"/("Comparison between no_shifty and sparta+ errors (by residue) - "+i+".pdf"))
