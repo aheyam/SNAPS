@@ -430,6 +430,7 @@ if args.plot:
             plt = plt + scale_x_reverse() + scale_y_reverse()
             plt.save(path/"plots/error_dist"/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
 
+
 # Analyse the error distribution of each set of predicted shifts
 comparison_dict = {"shiftx2":[obs_all, preds_shiftx2], "noshifty":[obs_all, preds_noshifty], "sparta":[obs_all, preds_sparta]}
 df_dict = {}
@@ -550,11 +551,6 @@ for out_dir in comparison_dict:
     df["ID_Res"] = df.ID + "_" + df.Res_name
     delta_wide = df.pivot(index="ID_Res", columns="Atom_type", values="Delta")
 
-    # Calculate the standard deviation of Delta for each testset protein
-    tmp = delta_wide.copy()
-    tmp["ID"] = tmp.index.str[0:4]
-    tmp.groupby("ID").std().to_csv(path/"output"/"error_dist"/(out_dir+"_Delta_stdev_by_ID.csv"))
-
     # Output the mean and covariance to .csv files (Can be used with the delta_correlation option in SNAPS config file)
     delta_wide.mean().to_csv(path/"output"/"error_dist"/(out_dir+"_d_mean.csv"))
     delta_wide.cov().to_csv(path/"output"/"error_dist"/(out_dir+"_d_cov.csv"))
@@ -580,6 +576,30 @@ for out_dir in comparison_dict:
                 plt = plt + ggtitle("Correlation between prediction errors for atoms "+atoms[i]+" and "+atoms[j]+f". r = {correlation.loc[atoms[i], atoms[j]]:.2f}")
                 plt = plt + scale_x_reverse() + scale_y_reverse()
                 plt.save(path/"plots/error_dist"/out_dir/("correlation between "+atoms[i]+" and "+atoms[j]+".pdf"), height=200, width=200, units="mm")
+
+    # Output information on each testset protein
+    testset_info = testset_df.loc[:,["ID","PDB","BMRB","Resolution","Length","Included"]]
+    testset_info["N_obs_residues"] = -1
+    testset_info["N_pred_residues"] = -1
+    testset_info["N_matched_residues"] = -1
+    testset_info["N_mismatched_residues"] = -1
+    testset_info["Seq_length_obs"] = -1
+    testset_info["Seq_length_pred"] = -1
+    for i in testset_df.ID.unique():
+        testset_info.loc[i, "N_obs_residues"] = len(obs[obs.ID==i].Res_N.unique())
+        testset_info.loc[i, "N_pred_residues"] = len(preds[preds.ID==i].Res_N.unique())
+        testset_info.loc[i, "Seq_length_obs"] = obs[obs.ID==i].Res_N.max() - obs[obs.ID==i].Res_N.min() + 1
+        testset_info.loc[i, "Seq_length_pred"] = preds[preds.ID==i].Res_N.max() - preds[preds.ID==i].Res_N.min() + 1
+        tmp = pd.merge(obs.loc[obs.ID==i, ["Res_N","SS_name"]], preds.loc[preds.ID==i, ["Res_N","Res_name"]], on="Res_N", how="inner")
+        testset_info.loc[i, "N_matched_residues"] = len(tmp[tmp.SS_name==tmp.Res_name].Res_N.unique())
+        testset_info.loc[i, "N_mismatched_residues"] = len(tmp[tmp.SS_name!=tmp.Res_name].Res_N.unique())
+
+    # Calculate the standard deviation of Delta for each testset protein
+    tmp = delta_wide.copy()
+    tmp["ID"] = tmp.index.str[0:4]
+    tmp2 = tmp.groupby("ID").std()  #.to_csv(path/"output"/"error_dist"/(out_dir+"_Delta_stdev_by_ID.csv"))
+    testset_info = pd.merge(testset_info, tmp2, how="left", left_index=True, right_index=True)
+    testset_info.to_csv(path/"output"/"error_dist"/(out_dir+"_info_StDev_by_ID.csv"))
 
     # Output the standard deviation of the error for each atom type and residue
     tmp = df.groupby("Atom_type").Delta
