@@ -90,10 +90,20 @@ def get_arguments(system_args):
 
     args = parser.parse_args(system_args)
     if args.test:   # For convenience when testing
-        args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
-                                  "data/P3a_L273R/shiftx2.cs",
+        # args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
+        #                           "data/P3a_L273R/shiftx2.cs",
+        #                           "output/test.txt",
+        #                           "--shift_type","snaps",
+        #                           "--pred_type","shiftx2",
+        #                           "-c","config/config_yaml_2.txt",
+        #                           "-l","output/test.log",
+        #                           "--strip_plot_file", "output/strip_plot.htm",
+        #                           "--hsqc_plot_file", "output/hsqc_plot.htm",
+        #                           "--test"))
+        args = parser.parse_args(("data/testset/simplified_BMRB/6357.txt",
+                                  "data/testset/noshifty_results/A033_1JTGC.cs",
                                   "output/test.txt",
-                                  "--shift_type","snaps",
+                                  "--shift_type","test",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",
                                   "-l","output/test.log",
@@ -182,7 +192,8 @@ def runSNAPS(system_args):
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
     if args.test:
-        a.find_consistent_assignments_3(verbose=True)
+        a.find_consistent_assignments_4(max_iterations=500, verbose=True)
+        breakpoint()
     
     #### Output the results
     

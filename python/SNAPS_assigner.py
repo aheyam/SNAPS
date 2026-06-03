@@ -866,9 +866,10 @@ class SNAPS_assigner:
                                          col_name:score_matrix_reduced.columns[col_ind]})
 
         if inc is not None:
-            matching = pd.concat([inc, matching_reduced])
+            matching = pd.concat([inc, matching_reduced]).sort_values("Res_name")
             return(matching)
         else:
+            matching_reduced = matching_reduced.sort_values("Res_name")
             return(matching_reduced)
 
     def make_assign_df(self, matching, set_assign_df=False):
@@ -1418,7 +1419,7 @@ class SNAPS_assigner:
     
     def find_consistent_assignments_3(self, threshold=0.2, set_assign_df=False, 
                                       init_inc=None, init_exc=None, verbose=False,
-                                      max_iterations = 500):
+                                      max_iterations = 50):
         """Try to find a consistent set of assignments by optimising both match
         to predictions and mismatches between adjacent residues.
         In this version, perform a tree search by finding the worst mismatch AB, creating three new nodes 
@@ -1433,7 +1434,7 @@ class SNAPS_assigner:
         """
         self.logger.info("Started assigning based on predictions and sequential links")
         
-        Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
+        # Node = namedtuple("Node", ["sum_log_prob","matching","inc","exc"])
 
         # Initial best matching (subject to initial constraints)
         best_matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, 
@@ -1450,14 +1451,17 @@ class SNAPS_assigner:
         
         tmp = {"ID": 0, 
                "sum_log_prob": self.calc_overall_matching_prob(best_matching), 
+               "worst_mismatch": -1.0,
                "matching": best_matching,
                "inc": init_inc, "exc": init_exc,
-               "Ranked": False}    
+               "Ranked": False,
+               "parent": None}    
                                                                                         
         node_df = pd.DataFrame([tmp])
         # breakpoint()
         iterations = 0
         while True:
+            breakpoint()
             # Set highest scoring unranked node as current_node
             # current_node = unranked_nodes.pop()
             next_best_node_index = node_df.loc[~node_df.Ranked, "sum_log_prob"].idxmax()
@@ -1485,8 +1489,9 @@ class SNAPS_assigner:
             # Find the worst mismatch in the current node
             consistency_df = self.check_matching_consistency(current_node.matching, threshold=threshold).sort_values("Res_name")
             worst_mismatch = consistency_df.Max_mismatch.max()
-            
-            # I don't think this selects the correct rows
+            node_df.loc[next_best_node_index, "worst_mismatch"] = worst_mismatch
+
+            # I don't think this selects the correct rows (outdated?)
             tmp = consistency_df.Max_mismatch.idxmax()
             first_row = consistency_df.index.get_loc(tmp)
             pair_A = matching_reduced.iloc[[first_row],:]   # [] around first_row needed to return DataFrame instead of Series
@@ -1506,11 +1511,14 @@ class SNAPS_assigner:
             for inc_exc in [(pair_A, pair_B),(pair_B, pair_A),(pairs_AB.loc[[],:], pairs_AB)]:
                 # Set up included residues
                 inc_i = inc_exc[0]
+                exc_i = inc_exc[1]
+
                 # breakpoint()
                 if current_node.inc is not None: 
                     # Check if any of the excluded residues for this new node are also force-included
                     if set(exc_i.Res_name) & set(current_node.inc.Res_name):
-                        continue    # If there are any residues in both exc_i and curent_node.inc, do not create a new node
+                        print("Residue in both inc and exc")    # If there are any residues in both exc_i and curent_node.inc, do not create a new node
+                        continue
                     # inc_i = inc_i.append(current_node.inc, ignore_index=True)
                     inc_i = pd.concat([inc_i, current_node.inc], ignore_index=True)
                     inc_i = inc_i.drop_duplicates()
@@ -1518,12 +1526,12 @@ class SNAPS_assigner:
                     inc_i = None
 
                 # Set up excluded resiudes
-                exc_i = inc_exc[1]
+                
                 if current_node.exc is not None:
-                    # Check if any of the force-included residues for this new node are also excluded
-                    # if set(inc_i.Res_name) & set(current_node.exc.Res_name):
-                    #     continue
-                    # exc_i = exc_i.append(current_node.exc, ignore_index=True)
+                #     # Check if any of the force-included residues for this new node are also excluded
+                #     # if set(inc_i.Res_name) & set(current_node.exc.Res_name):
+                #     #     continue
+                #     # exc_i = exc_i.append(current_node.exc, ignore_index=True)
                     exc_i = pd.concat([exc_i, current_node.exc], ignore_index=True)
                 
                 # breakpoint()
@@ -1536,6 +1544,7 @@ class SNAPS_assigner:
                     # If the non-constrained residues or spin systems are all
                     # dummies, find_best_assignment will return None, and this
                     # node can be discarded
+                    print("No matching found")
                     pass
                 else:
                     # Create a new child node and add to unranked_nodes
@@ -1546,11 +1555,15 @@ class SNAPS_assigner:
                     # unranked_nodes.add(node_i)
                     tmp = {"ID": node_df.ID.max()+1, 
                         "sum_log_prob": self.calc_overall_matching_prob(matching_i), 
+                        "worst_mismatch": -1.0,
                         "matching": matching_i,
                         "inc": inc_i, "exc": exc_i,
-                        "Ranked": False}
+                        "Ranked": False,
+                        "parent": current_node.ID}
                     # breakpoint()
                     node_df = pd.concat([node_df, pd.DataFrame([tmp])], ignore_index=True)  
+                    node_df.index = node_df.ID
+                    node_df.index.name = None
                     
                 
             # ranked_nodes.add(current_node)
@@ -1595,6 +1608,168 @@ class SNAPS_assigner:
         #     self.assign_df = best_assign_df
 
         # return(best_assign_df)
+
+    def find_consistent_assignments_4(self, threshold=0.2, 
+                                      init_inc=None, init_exc=None,
+                                      max_iterations=50, verbose=True):
+        """Try to find a consistent set of assignments by optimising both match
+        to predictions and mismatches between adjacent residues.
+        In this version, perform a tree search by finding the worst mismatch AB, creating three new nodes 
+        (A&!B, B&!A, !A&!B), then following the one with the best total probability. Inspired by Murty 
+        algorithm for k-best assignments (see: Murty, K. (1968). An Algorithm for Ranking all the Assignments 
+        in Order of Increasing Cost. Operations Research, 16(3), 682-687)
+
+        In this version, all inconsistent assignments next to force-included residues
+        are excluded at once, to try and speed up search.
+
+        Returns an assign_df DataFrame, but does not modify the class
+
+        Parameters
+        threshold: the maximum allowed mismatch for a good sequential link
+        """
+        self.logger.info("Started assigning based on predictions and sequential links")
+
+        # Initial best matching (subject to initial constraints)
+        best_matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, 
+                                                  inc=init_inc, exc=init_exc)
+        best_matching.index = best_matching["Res_name"]     # Note that we'll index matching by Res_name
+        best_matching.index.name = None
+
+        # Define dataframe to keep track of nodes
+        node_df = pd.DataFrame([{"ID": 0, 
+                "Parent": None, "Depth": 0,
+                "Ranked": False,
+                "Sum_log_prob": self.calc_overall_matching_prob(best_matching), 
+                "Worst_mismatch": -1.0,
+                "Matching": best_matching,
+                "Inc": init_inc, "Exc": init_exc,
+                "N_inc": 0, "N_exc": 0 }])
+        node_df.set_index("ID")
+
+        # Main loop: create and check new nodes until a consistent assignment is found, or iteration limit is reached
+        iterations = 0
+        while True:
+            # breakpoint()
+            # Choose the highest-scoring unranked node
+            next_node_index = node_df.loc[~node_df.Ranked, "Sum_log_prob"].idxmax()
+            current_node = node_df.loc[next_node_index,:].copy()
+
+            # Find the worst mismatch in the current node
+            current_node.Matching = current_node.Matching.sort_values("Res_name")
+            consistency_df = self.check_matching_consistency(current_node.Matching, threshold=threshold).sort_values("Res_name")
+            worst_mismatch = consistency_df.Max_mismatch.max()
+            node_df.loc[next_node_index, "Worst_mismatch"] = worst_mismatch
+
+            # Get the assignments at the mismatch
+            res_A = consistency_df.Max_mismatch_p1.idxmax()
+            res_B = consistency_df.Max_mismatch_m1.idxmax()
+
+            # prepare dataframes for including/excluding assignments
+            assn_df_A = current_node.Matching.loc[[res_A], :]
+            assn_df_B = current_node.Matching.loc[[res_B], :]
+            assn_df_AB = current_node.Matching.loc[[res_A,res_B], :]
+            assn_df_empty = current_node.Matching.loc[[],:]
+
+            # Create child nodes and add to node_df
+            for i in ["A","B","!AB"]:
+                # Set up included residues
+                inc_assn = assn_df_empty
+                if i=="A":
+                    inc_assn = assn_df_A
+                elif i=="B":
+                    inc_assn = assn_df_B                   
+                if current_node.Inc is not None:
+                    inc_assn = pd.concat([inc_assn, current_node.Inc], ignore_index=True)
+                    inc_assn = inc_assn.drop_duplicates()
+                
+                # Set up excluded residues
+                exc_assn = assn_df_empty
+                if i == "!AB":
+                    exc_assn = assn_df_AB
+                if current_node.Exc is not None:
+                    exc_assn = pd.concat([exc_assn, current_node.Exc], ignore_index=True)
+                # Exclude any assignments that are inconsistent with the included residues
+                for x in inc_assn.index:
+                    res_name =  inc_assn.loc[x, "Res_name"]
+                    ss_name = inc_assn.loc[x, "SS_name"]
+                    res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
+                    res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
+                    if res_name_m1 is not np.nan:
+                        mask = (self.mismatch_matrix.loc[:, ss_name] > threshold)
+                        excluded_ss_m1 = list(self.mismatch_matrix.index[mask])
+                        excluded_pairs_m1 = pd.DataFrame({"SS_name":excluded_ss_m1, 
+                                                          "Res_name":[res_name_m1]*len(excluded_ss_m1)})
+                        exc_assn = pd.concat([exc_assn, excluded_pairs_m1], ignore_index=True)
+                    if res_name_p1 is not np.nan:
+                        mask = (self.mismatch_matrix.loc[ss_name, :] > threshold)
+                        excluded_ss_p1 = list(self.mismatch_matrix.columns[mask])
+                        excluded_pairs_p1 = pd.DataFrame({"SS_name":excluded_ss_p1, 
+                                                          "Res_name":[res_name_p1]*len(excluded_ss_p1)})
+                        exc_assn = pd.concat([exc_assn, excluded_pairs_p1], ignore_index=True)
+                
+                # Remove duplicate constraints
+                inc_assn["Res_SS"] = inc_assn.Res_name + inc_assn.SS_name
+                exc_assn["Res_SS"] = exc_assn.Res_name + exc_assn.SS_name
+                inc_ass = inc_assn.drop_duplicates("Res_SS")
+                exc_ass = exc_assn.drop_duplicates("Res_SS")
+
+                # Discard node if the constraints are inconsistent
+                # (ie. if any assignments are both included and excluded)
+                
+                if set(exc_assn.Res_SS) & set(inc_assn.Res_SS):
+                    self.logger("Inconsistent contraints found for new node - discarded")
+                    continue
+
+                # Find the best matching
+                # if inc_assn.shape[0]==0:    # If there are no included residues, faster to replace with None
+                #     inc_assn = None
+                matching = self.find_best_assignment(self.log_prob_matrix, maximise=True,
+                                                        inc=inc_assn[["Res_name","SS_name"]], 
+                                                        exc=exc_assn[["Res_name","SS_name"]],
+                                                        return_none_all_dummy=True)
+                if matching is None:
+                    # If the non-constrained residues or spin systems are all
+                    # dummies, find_best_assignment will return None, and this
+                    # node can be discarded
+                    self.logger("No matching found")
+                    continue
+                
+                # Add node to node_df
+                matching.index = matching["Res_name"]
+                matching.index.name = None
+
+                new_node = pd.DataFrame([{"ID": node_df.ID.max() + 1, 
+                            "Parent": current_node.ID, 
+                            "Depth": current_node.Depth + 1,
+                            "Ranked": False,
+                            "Sum_log_prob": self.calc_overall_matching_prob(matching), 
+                            "Worst_mismatch": -1.0,
+                            "Matching": matching,
+                            "Inc": inc_assn, "Exc": exc_assn,
+                            "N_inc": inc_assn.index.size, "N_exc": exc_assn.index.size }])
+                
+                node_df = pd.concat([node_df, new_node], ignore_index=True)  
+                node_df.index = node_df.ID
+                node_df.index.name = None
+            
+            node_df.loc[next_node_index, "Ranked"] = True
+            node_df = node_df.sort_values("Sum_log_prob", ascending=False)
+
+            # If a consistent assignment has been found, exit the loop
+            if worst_mismatch < threshold:
+                break
+            # Exit the loop if max iterations reached
+            if verbose: print(iterations, current_node.ID, current_node.Parent, current_node.Depth,
+                    "%.2f" % current_node.Sum_log_prob, "%.2f" % worst_mismatch, 
+                    (consistency_df.Confidence=="High").sum(),
+                    (consistency_df.Confidence=="Medium").sum(), 
+                    current_node.N_inc, current_node.N_exc)
+            iterations += 1
+            if iterations >= max_iterations:
+                breakpoint()
+                break
+
+        return(node_df)
 
     def find_seq_assignment(self):
         """Find the ordering that maximises the number of good sequential links"""
