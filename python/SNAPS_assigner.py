@@ -772,7 +772,7 @@ class SNAPS_assigner:
             self.consistent_links_matrix = consistent_links_matrix
             return(self.mismatch_matrix, consistent_links_matrix)
 
-    def find_best_assignment(self, score_matrix, maximise=True, inc=None, exc=None,
+    def find_best_assignment(self, score_matrix, maximise=True, inc=None, exc=None, exc_mask=None,
                              dummy_rows=[], dummy_cols=[], return_none_all_dummy=False):
         """ Use the Hungarian algorithm to find the highest scoring assignment,
         with constraints. Generalised so it can be used for assigning either
@@ -788,6 +788,9 @@ class SNAPS_assigner:
         inc: a DataFrame of (row, col) pairs which must be part of the assignment.
             First column has the index names, second has the column names.
         exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
+        exc_mask: a DataFrame with the same size and indexes as score_matrix.
+            Contains boolean values, with True meaning an assignment is to be excluded.
+            Note that it is possible to provide both exc and exc_mask
         """
         score_matrix = score_matrix.copy()
 
@@ -795,6 +798,14 @@ class SNAPS_assigner:
         col_name = score_matrix.columns.name
 
         self.logger.debug("Started linear assignment")
+
+        if exc_mask is not None:
+            if maximise:
+                penalty = -2*score_matrix.abs().max().max()
+            else:
+                penalty = 2*score_matrix.abs().max().max()
+            
+            score_matrix = score_matrix.mask(exc_mask, other=penalty)
 
         if inc is not None:
             # Check for conflicting entries in inc
@@ -832,7 +843,6 @@ class SNAPS_assigner:
                     self.logger.debug("Score matrix includes only dummy columns")
                     return(None)   
             
-
         if exc is not None:
             # Penalise excluded (row, col) pairs
             if maximise:
@@ -850,7 +860,7 @@ class SNAPS_assigner:
                     score_matrix_reduced.loc[dummy_rows,
                                              r[col_name]] = penalty
                 else:
-                    score_matrix_reduced.loc[r["SS_name"], r["Res_name"]] = penalty
+                    score_matrix_reduced.loc[r[row_name], r[col_name]] = penalty
 
             self.logger.debug("Penalised %d excluded row,column pairs" % len(exc.index))
 
@@ -1641,6 +1651,7 @@ class SNAPS_assigner:
                 "Ranked": False,
                 "Sum_log_prob": self.calc_overall_matching_prob(best_matching), 
                 "Worst_mismatch": -1.0,
+                "N_high": 0, "N_med": 0,
                 "Matching": best_matching,
                 "Inc": init_inc, "Exc": init_exc,
                 "N_inc": 0, "N_exc": 0 }])
@@ -1649,7 +1660,9 @@ class SNAPS_assigner:
         # Main loop: create and check new nodes until a consistent assignment is found, or iteration limit is reached
         iterations = 0
         while True:
-            # breakpoint()
+            
+            # if iterations>50: breakpoint()
+
             # Choose the highest-scoring unranked node
             next_node_index = node_df.loc[~node_df.Ranked, "Sum_log_prob"].idxmax()
             current_node = node_df.loc[next_node_index,:].copy()
@@ -1659,6 +1672,8 @@ class SNAPS_assigner:
             consistency_df = self.check_matching_consistency(current_node.Matching, threshold=threshold).sort_values("Res_name")
             worst_mismatch = consistency_df.Max_mismatch.max()
             node_df.loc[next_node_index, "Worst_mismatch"] = worst_mismatch
+            node_df.loc[next_node_index, "N_high"] = (consistency_df.Confidence=="High").sum()
+            node_df.loc[next_node_index, "N_med"] = (consistency_df.Confidence=="Medium").sum()
 
             # Get the assignments at the mismatch
             res_A = consistency_df.Max_mismatch_p1.idxmax()
@@ -1689,24 +1704,39 @@ class SNAPS_assigner:
                 if current_node.Exc is not None:
                     exc_assn = pd.concat([exc_assn, current_node.Exc], ignore_index=True)
                 # Exclude any assignments that are inconsistent with the included residues
+                exc_mask = pd.DataFrame(data=False, index=self.log_prob_matrix.index, columns=self.log_prob_matrix.columns)
                 for x in inc_assn.index:
                     res_name =  inc_assn.loc[x, "Res_name"]
                     ss_name = inc_assn.loc[x, "SS_name"]
                     res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
                     res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
                     if res_name_m1 is not np.nan:
-                        mask = (self.mismatch_matrix.loc[:, ss_name] > threshold)
-                        excluded_ss_m1 = list(self.mismatch_matrix.index[mask])
-                        excluded_pairs_m1 = pd.DataFrame({"SS_name":excluded_ss_m1, 
-                                                          "Res_name":[res_name_m1]*len(excluded_ss_m1)})
-                        exc_assn = pd.concat([exc_assn, excluded_pairs_m1], ignore_index=True)
+                        exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | (self.mismatch_matrix.loc[:, ss_name] > threshold)
                     if res_name_p1 is not np.nan:
-                        mask = (self.mismatch_matrix.loc[ss_name, :] > threshold)
-                        excluded_ss_p1 = list(self.mismatch_matrix.columns[mask])
-                        excluded_pairs_p1 = pd.DataFrame({"SS_name":excluded_ss_p1, 
-                                                          "Res_name":[res_name_p1]*len(excluded_ss_p1)})
-                        exc_assn = pd.concat([exc_assn, excluded_pairs_p1], ignore_index=True)
+                        exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | (self.mismatch_matrix.loc[ss_name, :] > threshold)
+
+                # for x in inc_assn.index:
+                #     res_name =  inc_assn.loc[x, "Res_name"]
+                #     ss_name = inc_assn.loc[x, "SS_name"]
+                #     res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
+                #     res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
+                #     if res_name_m1 is not np.nan:
+                #         mask = (self.mismatch_matrix.loc[:, ss_name] > threshold)
+                #         excluded_ss_m1 = list(self.mismatch_matrix.index[mask])
+                #         excluded_pairs_m1 = pd.DataFrame({"SS_name":excluded_ss_m1, 
+                #                                           "Res_name":[res_name_m1]*len(excluded_ss_m1)})
+                #         exc_assn = pd.concat([exc_assn, excluded_pairs_m1], ignore_index=True)
+                #     if res_name_p1 is not np.nan:
+                #         mask = (self.mismatch_matrix.loc[ss_name, :] > threshold)
+                #         excluded_ss_p1 = list(self.mismatch_matrix.columns[mask])
+                #         excluded_pairs_p1 = pd.DataFrame({"SS_name":excluded_ss_p1, 
+                #                                           "Res_name":[res_name_p1]*len(excluded_ss_p1)})
+                #         exc_assn = pd.concat([exc_assn, excluded_pairs_p1], ignore_index=True)
                 
+                # Add exc_assn pairs into exc_mask
+                for i in exc_assn.index: 
+                    exc_mask.loc[exc_assn.SS_name[i], exc_assn.Res_name[i]] = True
+
                 # Remove duplicate constraints
                 inc_assn["Res_SS"] = inc_assn.Res_name + inc_assn.SS_name
                 exc_assn["Res_SS"] = exc_assn.Res_name + exc_assn.SS_name
@@ -1716,22 +1746,26 @@ class SNAPS_assigner:
                 # Discard node if the constraints are inconsistent
                 # (ie. if any assignments are both included and excluded)
                 
-                if set(exc_assn.Res_SS) & set(inc_assn.Res_SS):
-                    self.logger("Inconsistent contraints found for new node - discarded")
-                    continue
+                # if set(exc_assn.Res_SS) & set(inc_assn.Res_SS):
+                #     self.logger("Inconsistent contraints found for new node - discarded")
+                #     continue
+                for i in inc_assn.index:
+                    if exc_mask.loc[inc_assn.SS_name[i], inc_assn.Res_name[i]]:
+                        self.logger.info("Inconsistent contraints found for new node - discarded")
+                        continue
 
                 # Find the best matching
                 # if inc_assn.shape[0]==0:    # If there are no included residues, faster to replace with None
                 #     inc_assn = None
                 matching = self.find_best_assignment(self.log_prob_matrix, maximise=True,
                                                         inc=inc_assn[["Res_name","SS_name"]], 
-                                                        exc=exc_assn[["Res_name","SS_name"]],
+                                                        exc_mask=exc_mask,
                                                         return_none_all_dummy=True)
                 if matching is None:
                     # If the non-constrained residues or spin systems are all
                     # dummies, find_best_assignment will return None, and this
                     # node can be discarded
-                    self.logger("No matching found")
+                    self.logger.info("No matching found")
                     continue
                 
                 # Add node to node_df
@@ -1744,9 +1778,10 @@ class SNAPS_assigner:
                             "Ranked": False,
                             "Sum_log_prob": self.calc_overall_matching_prob(matching), 
                             "Worst_mismatch": -1.0,
+                            "N_high": 0, "N_med": 0,
                             "Matching": matching,
                             "Inc": inc_assn, "Exc": exc_assn,
-                            "N_inc": inc_assn.index.size, "N_exc": exc_assn.index.size }])
+                            "N_inc": inc_assn.index.size, "N_exc": exc_mask.sum().sum() }])
                 
                 node_df = pd.concat([node_df, new_node], ignore_index=True)  
                 node_df.index = node_df.ID

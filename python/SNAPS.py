@@ -192,7 +192,7 @@ def runSNAPS(system_args):
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
     if args.test:
-        a.find_consistent_assignments_4(max_iterations=500, verbose=True)
+        a.find_consistent_assignments_4(max_iterations=1500, verbose=True)
         breakpoint()
     
     #### Output the results
