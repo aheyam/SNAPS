@@ -1706,31 +1706,36 @@ class SNAPS_assigner:
                     exc_assn = pd.concat([exc_assn, current_node.Exc], ignore_index=True)
                 # Exclude any assignments that are inconsistent with the included residues
                 exc_mask = pd.DataFrame(data=False, index=self.log_prob_matrix.index, columns=self.log_prob_matrix.columns)
-                for x in inc_assn.index:
-                    res_name =  inc_assn.loc[x, "Res_name"]
-                    ss_name = inc_assn.loc[x, "SS_name"]
-                    res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
-                    res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
-                    if res_name_m1 is not np.nan:
-                        exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | (self.mismatch_matrix.loc[:, ss_name] > threshold)
-                    if res_name_p1 is not np.nan:
-                        exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | (self.mismatch_matrix.loc[ss_name, :] > threshold)
+                # for x in inc_assn.index:
+                #     res_name =  inc_assn.loc[x, "Res_name"]
+                #     ss_name = inc_assn.loc[x, "SS_name"]
+                #     res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
+                #     res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
+                #     if res_name_m1 is not np.nan:
+                #         exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | (self.mismatch_matrix.loc[:, ss_name] > threshold)
+                #     if res_name_p1 is not np.nan:
+                #         exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | (self.mismatch_matrix.loc[ss_name, :] > threshold)
 
-                breakpoint()
+                # breakpoint()
 
                 # An attempt to speed up the above loop - not quite working yet due to NA handling issues.
-                # res_name = inc_assn.loc[:,"Res_name"]
-                # ss_name = inc_assn.loc[:, "SS_name"]
-                # res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
-                # res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
+                res_name = inc_assn.loc[:,"Res_name"]
+                ss_name = inc_assn.loc[:, "SS_name"]
+                res_name_m1 = self.preds.loc[res_name, "Res_name_m1"].reset_index().Res_name_m1
+                res_name_p1 = self.preds.loc[res_name, "Res_name_p1"].reset_index().Res_name_p1
                 # # Work out which spin systems should be excluded at the i-1 position
-                # exc_mask_m1 = self.mismatch_matrix.loc[:, ss_name] > threshold
-                # exc_mask_m1.columns = res_name_m1
-                # exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | exc_mask_m1
+                ss_name_m1 = ss_name[~res_name_m1.isna()]
+                res_name_m1 = res_name_m1[~res_name_m1.isna()]
+                exc_mask_m1 = self.mismatch_matrix.loc[:, ss_name_m1] > threshold
+                exc_mask_m1.columns = res_name_m1
+                exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | exc_mask_m1
                 # # Work out which spin systems should be excluded at the i+1 position
-                # exc_mask_p1 = (self.mismatch_matrix.loc[ss_name, :] > threshold).transpose()
-                # exc_mask_p1.columns = res_name_p1
-                # exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | exc_mask_p1
+                # breakpoint()
+                ss_name_p1 = ss_name[~res_name_p1.isna()]
+                res_name_p1 = res_name_p1[~res_name_p1.isna()]
+                exc_mask_p1 = (self.mismatch_matrix.loc[ss_name_p1, :] > threshold).transpose()
+                exc_mask_p1.columns = res_name_p1
+                exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | exc_mask_p1
 
                 # tmp_m1 = inc_assn.copy()
                 # tmp_m1["Res_name_m1"] = self.preds.loc[tmp["Res_name"], "Res_name_m1"]
