@@ -1641,17 +1641,19 @@ class SNAPS_assigner:
 
         # Initial best matching (subject to initial constraints)
         best_matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, 
-                                                  inc=init_inc, exc=init_exc)
+                                                  inc=init_inc, exc=init_exc).sort_values("Res_name")
         best_matching.index = best_matching["Res_name"]     # Note that we'll index matching by Res_name
         best_matching.index.name = None
+        consistency_df = self.check_matching_consistency(best_matching, threshold=threshold).sort_values("Res_name")
 
         # Define dataframe to keep track of nodes
         node_df = pd.DataFrame([{"ID": 0, 
                 "Parent": None, "Depth": 0, "ID2": 0.0,
                 "Ranked": False, "Iteration": 0,
                 "Sum_log_prob": self.calc_overall_matching_prob(best_matching), 
-                "Worst_mismatch": -1.0,
-                "N_high": 0, "N_med": 0,
+                "Worst_mismatch": consistency_df.Max_mismatch.max(),
+                "N_high": (consistency_df.Confidence=="High").sum(), 
+                "N_med": (consistency_df.Confidence=="Medium").sum(),
                 "Matching": best_matching,
                 "Inc": init_inc, "Exc": init_exc,
                 "N_inc": 0, "N_exc": 0 }])
@@ -1669,12 +1671,12 @@ class SNAPS_assigner:
             node_df.loc[next_node_index, "Iteration"] = iterations
 
             # Find the worst mismatch in the current node
-            current_node.Matching = current_node.Matching.sort_values("Res_name")
+            # current_node.Matching = current_node.Matching.sort_values("Res_name")
             consistency_df = self.check_matching_consistency(current_node.Matching, threshold=threshold).sort_values("Res_name")
-            worst_mismatch = consistency_df.Max_mismatch.max()
-            node_df.loc[next_node_index, "Worst_mismatch"] = worst_mismatch
-            node_df.loc[next_node_index, "N_high"] = (consistency_df.Confidence=="High").sum()
-            node_df.loc[next_node_index, "N_med"] = (consistency_df.Confidence=="Medium").sum()
+            # worst_mismatch = consistency_df.Max_mismatch.max()
+            # node_df.loc[next_node_index, "Worst_mismatch"] = worst_mismatch
+            # node_df.loc[next_node_index, "N_high"] = (consistency_df.Confidence=="High").sum()
+            # node_df.loc[next_node_index, "N_med"] = (consistency_df.Confidence=="Medium").sum()
 
             # Get the assignments at the mismatch
             res_A = consistency_df.Max_mismatch_p1.idxmax()
@@ -1704,6 +1706,13 @@ class SNAPS_assigner:
                     exc_assn = assn_df_AB
                 if current_node.Exc is not None:
                     exc_assn = pd.concat([exc_assn, current_node.Exc], ignore_index=True)
+
+                # Remove duplicate constraints
+                inc_assn["Res_SS"] = inc_assn.Res_name + inc_assn.SS_name
+                exc_assn["Res_SS"] = exc_assn.Res_name + exc_assn.SS_name
+                inc_assn = inc_assn.drop_duplicates("Res_SS").reset_index(drop=True)
+                exc_assn = exc_assn.drop_duplicates("Res_SS").reset_index(drop=True)
+
                 # Exclude any assignments that are inconsistent with the included residues
                 exc_mask = pd.DataFrame(data=False, index=self.log_prob_matrix.index, columns=self.log_prob_matrix.columns)
                 # for x in inc_assn.index:
@@ -1716,13 +1725,11 @@ class SNAPS_assigner:
                 #     if res_name_p1 is not np.nan:
                 #         exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | (self.mismatch_matrix.loc[ss_name, :] > threshold)
 
-                # breakpoint()
-
-                # An attempt to speed up the above loop - not quite working yet due to NA handling issues.
+                # An attempt to speed up the above loop
                 res_name = inc_assn.loc[:,"Res_name"]
                 ss_name = inc_assn.loc[:, "SS_name"]
-                res_name_m1 = self.preds.loc[res_name, "Res_name_m1"].reset_index().Res_name_m1
-                res_name_p1 = self.preds.loc[res_name, "Res_name_p1"].reset_index().Res_name_p1
+                res_name_m1 = self.preds.loc[res_name, "Res_name_m1"].reset_index(drop=True)
+                res_name_p1 = self.preds.loc[res_name, "Res_name_p1"].reset_index(drop=True)
                 # # Work out which spin systems should be excluded at the i-1 position
                 ss_name_m1 = ss_name[~res_name_m1.isna()]
                 res_name_m1 = res_name_m1[~res_name_m1.isna()]
@@ -1730,7 +1737,6 @@ class SNAPS_assigner:
                 exc_mask_m1.columns = res_name_m1
                 exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | exc_mask_m1
                 # # Work out which spin systems should be excluded at the i+1 position
-                # breakpoint()
                 ss_name_p1 = ss_name[~res_name_p1.isna()]
                 res_name_p1 = res_name_p1[~res_name_p1.isna()]
                 exc_mask_p1 = (self.mismatch_matrix.loc[ss_name_p1, :] > threshold).transpose()
@@ -1762,12 +1768,6 @@ class SNAPS_assigner:
                 for i in exc_assn.index: 
                     exc_mask.loc[exc_assn.SS_name[i], exc_assn.Res_name[i]] = True
 
-                # Remove duplicate constraints
-                inc_assn["Res_SS"] = inc_assn.Res_name + inc_assn.SS_name
-                exc_assn["Res_SS"] = exc_assn.Res_name + exc_assn.SS_name
-                inc_ass = inc_assn.drop_duplicates("Res_SS")
-                exc_ass = exc_assn.drop_duplicates("Res_SS")
-
                 # Discard node if the constraints are inconsistent
                 # (ie. if any assignments are both included and excluded)
                 
@@ -1796,6 +1796,7 @@ class SNAPS_assigner:
                 # Add node to node_df
                 matching.index = matching["Res_name"]
                 matching.index.name = None
+                new_consistency_df = self.check_matching_consistency(matching, threshold=threshold).sort_values("Res_name")
 
                 if child == "A":
                     tmp = 0.0
@@ -1811,8 +1812,9 @@ class SNAPS_assigner:
                             "ID2": current_node.ID2+tmp*3.0**-current_node.Depth,
                             "Iteration": np.nan,
                             "Sum_log_prob": self.calc_overall_matching_prob(matching), 
-                            "Worst_mismatch": -1.0,
-                            "N_high": 0, "N_med": 0,
+                            "Worst_mismatch": new_consistency_df.Max_mismatch.max(),
+                            "N_high": (new_consistency_df.Confidence=="High").sum(), 
+                            "N_med": (new_consistency_df.Confidence=="Medium").sum(),
                             "Matching": matching,
                             "Inc": inc_assn, "Exc": exc_assn,
                             "N_inc": inc_assn.index.size, "N_exc": exc_mask.sum().sum() }])
@@ -1825,14 +1827,15 @@ class SNAPS_assigner:
             node_df = node_df.sort_values("Sum_log_prob", ascending=False)
 
             # If a consistent assignment has been found, exit the loop
-            if worst_mismatch < threshold:
+            if current_node.Worst_mismatch < threshold:
                 break
             # Exit the loop if max iterations reached
             if verbose: print(iterations, current_node.ID, current_node.Parent, current_node.Depth,
-                    "%.2f" % current_node.Sum_log_prob, "%.2f" % worst_mismatch, 
+                    "%.2f" % current_node.Sum_log_prob, "%.2f" % current_node.Worst_mismatch, 
                     (consistency_df.Confidence=="High").sum(),
                     (consistency_df.Confidence=="Medium").sum(), 
                     current_node.N_inc, current_node.N_exc)
+            
             iterations += 1
             if iterations >= max_iterations:
                 # breakpoint()
