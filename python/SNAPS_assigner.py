@@ -1647,8 +1647,8 @@ class SNAPS_assigner:
 
         # Define dataframe to keep track of nodes
         node_df = pd.DataFrame([{"ID": 0, 
-                "Parent": None, "Depth": 0,
-                "Ranked": False,
+                "Parent": None, "Depth": 0, "ID2": 0.0,
+                "Ranked": False, "Iteration": 0,
                 "Sum_log_prob": self.calc_overall_matching_prob(best_matching), 
                 "Worst_mismatch": -1.0,
                 "N_high": 0, "N_med": 0,
@@ -1661,11 +1661,12 @@ class SNAPS_assigner:
         iterations = 0
         while True:
             
-            # if iterations>50: breakpoint()
+            # breakpoint()
 
             # Choose the highest-scoring unranked node
             next_node_index = node_df.loc[~node_df.Ranked, "Sum_log_prob"].idxmax()
             current_node = node_df.loc[next_node_index,:].copy()
+            node_df.loc[next_node_index, "Iteration"] = iterations
 
             # Find the worst mismatch in the current node
             current_node.Matching = current_node.Matching.sort_values("Res_name")
@@ -1686,12 +1687,12 @@ class SNAPS_assigner:
             assn_df_empty = current_node.Matching.loc[[],:]
 
             # Create child nodes and add to node_df
-            for i in ["A","B","!AB"]:
+            for child in ["A","B","!AB"]:
                 # Set up included residues
                 inc_assn = assn_df_empty
-                if i=="A":
+                if child=="A":
                     inc_assn = assn_df_A
-                elif i=="B":
+                elif child=="B":
                     inc_assn = assn_df_B                   
                 if current_node.Inc is not None:
                     inc_assn = pd.concat([inc_assn, current_node.Inc], ignore_index=True)
@@ -1699,7 +1700,7 @@ class SNAPS_assigner:
                 
                 # Set up excluded residues
                 exc_assn = assn_df_empty
-                if i == "!AB":
+                if child == "!AB":
                     exc_assn = assn_df_AB
                 if current_node.Exc is not None:
                     exc_assn = pd.concat([exc_assn, current_node.Exc], ignore_index=True)
@@ -1714,6 +1715,25 @@ class SNAPS_assigner:
                         exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | (self.mismatch_matrix.loc[:, ss_name] > threshold)
                     if res_name_p1 is not np.nan:
                         exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | (self.mismatch_matrix.loc[ss_name, :] > threshold)
+
+                breakpoint()
+
+                # An attempt to speed up the above loop - not quite working yet due to NA handling issues.
+                # res_name = inc_assn.loc[:,"Res_name"]
+                # ss_name = inc_assn.loc[:, "SS_name"]
+                # res_name_m1 = self.preds.loc[res_name, "Res_name_m1"]
+                # res_name_p1 = self.preds.loc[res_name, "Res_name_p1"]
+                # # Work out which spin systems should be excluded at the i-1 position
+                # exc_mask_m1 = self.mismatch_matrix.loc[:, ss_name] > threshold
+                # exc_mask_m1.columns = res_name_m1
+                # exc_mask.loc[:,res_name_m1] = exc_mask.loc[:,res_name_m1] | exc_mask_m1
+                # # Work out which spin systems should be excluded at the i+1 position
+                # exc_mask_p1 = (self.mismatch_matrix.loc[ss_name, :] > threshold).transpose()
+                # exc_mask_p1.columns = res_name_p1
+                # exc_mask.loc[:,res_name_p1] = exc_mask.loc[:,res_name_p1] | exc_mask_p1
+
+                # tmp_m1 = inc_assn.copy()
+                # tmp_m1["Res_name_m1"] = self.preds.loc[tmp["Res_name"], "Res_name_m1"]
 
                 # for x in inc_assn.index:
                 #     res_name =  inc_assn.loc[x, "Res_name"]
@@ -1772,10 +1792,19 @@ class SNAPS_assigner:
                 matching.index = matching["Res_name"]
                 matching.index.name = None
 
+                if child == "A":
+                    tmp = 0.0
+                elif child=="B":
+                    tmp=1.0/3
+                else:
+                    tmp=2.0/3
+
                 new_node = pd.DataFrame([{"ID": node_df.ID.max() + 1, 
                             "Parent": current_node.ID, 
                             "Depth": current_node.Depth + 1,
                             "Ranked": False,
+                            "ID2": current_node.ID2+tmp*3.0**-current_node.Depth,
+                            "Iteration": np.nan,
                             "Sum_log_prob": self.calc_overall_matching_prob(matching), 
                             "Worst_mismatch": -1.0,
                             "N_high": 0, "N_med": 0,
@@ -1801,7 +1830,7 @@ class SNAPS_assigner:
                     current_node.N_inc, current_node.N_exc)
             iterations += 1
             if iterations >= max_iterations:
-                breakpoint()
+                # breakpoint()
                 break
 
         return(node_df)

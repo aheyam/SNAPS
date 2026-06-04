@@ -13,6 +13,9 @@ import logging
 
 import pdb
 
+# For testing
+from plotnine import *
+
 def get_arguments(system_args):
     import argparse
 
@@ -192,8 +195,22 @@ def runSNAPS(system_args):
                 logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
 
     if args.test:
-        a.find_consistent_assignments_4(max_iterations=1500, verbose=True)
+        high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
+        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=500, verbose=True, init_inc=high_conf_assn)
+        best_node = (node_df.N_high + node_df.N_med).idxmax()
+        best_matching = node_df.loc[best_node, "Matching"]
+        b = a.copy()
+        b.make_assign_df(best_matching, set_assign_df=True)
+        b.add_consistency_info(threshold=0.2)
+        b.assign_df.to_csv(r"C:\Users\chmahey\GitHub\SNAPS\output\test_consistent.txt", sep="\t", float_format="%.3f",
+                           index=False)
+        b.plot_strips(r"C:\Users\chmahey\GitHub\SNAPS\output\strip_plot_consistent.htm", "html")
+        
+        plt = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))
+        plt.save(r"C:\Users\chmahey\GitHub\SNAPS\output\test_history.pdf")
         breakpoint()
+
+
     
     #### Output the results
     
