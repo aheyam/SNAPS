@@ -1667,6 +1667,7 @@ class SNAPS_assigner:
 
             # Choose the highest-scoring unranked node
             next_node_index = node_df.loc[~node_df.Ranked, "Sum_log_prob"].idxmax()
+            # next_node_index = (node_df.loc[~node_df.Ranked, "N_high"] + node_df.loc[~node_df.Ranked, "N_med"]).idxmax()
             current_node = node_df.loc[next_node_index,:].copy()
             node_df.loc[next_node_index, "Iteration"] = iterations
 
@@ -1901,7 +1902,7 @@ class SNAPS_assigner:
                         "C":"13C", "CA":"13C", "CB":"13C"}
             df["Nuc"] = [nuc_dict[a] for a in df["Atom"]]
 
-            output_df = df[["Group","Atom","Nuc","Shift"]]
+            output_df = df.loc[:, ["Group","Atom","Nuc","Shift"]]
             output_df["Sdev"] = 0.0
             output_df["Assignments"] = int(1)
 
@@ -1913,7 +1914,7 @@ class SNAPS_assigner:
         elif format=="xeasy":
             df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
 
-            output_df = df[["Shift","Atom_type","Res_N"]]
+            output_df = df.loc[:,["Shift","Atom_type","Res_N"]]
             output_df.insert(1, "Sdev", 0)
 
             output_df["Shift"] = output_df["Shift"].fillna(999.0)
@@ -1926,7 +1927,7 @@ class SNAPS_assigner:
         elif format=="nmrpipe":
             df.loc[df["Atom_type"]=="H","Atom_type"] = "HN"
 
-            output_df = df[["Res_N", "Res_type", "Atom_type", "Shift"]]
+            output_df = df.loc[:, ["Res_N", "Res_type", "Atom_type", "Shift"]]
 
             output_df["Shift"] = output_df["Shift"].fillna(9999.0)
             output_df = output_df.dropna()

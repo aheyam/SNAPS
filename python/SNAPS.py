@@ -10,6 +10,7 @@ from tabulate import tabulate
 from SNAPS_importer import SNAPS_importer
 from SNAPS_assigner import SNAPS_assigner
 import logging
+from pathlib import Path
 
 import pdb
 
@@ -27,8 +28,8 @@ def get_arguments(system_args):
                         help="A table of observed chemical shifts.")
     parser.add_argument("pred_file",
                         help="A table of predicted chemical shifts.")
-    parser.add_argument("output_file",
-                        help="The file results will be written to.")
+    parser.add_argument("output_dir",
+                        help="The directory results will be written to.")
 
     # Information on input files and configuration options
     parser.add_argument("--shift_type",
@@ -67,10 +68,6 @@ def get_arguments(system_args):
     #TODO: Need to rethink how SS_class info is imported.
 
     # Options controlling output files
-    parser.add_argument("-l", "--log_file", default=None,
-                        help="A file logging information will be written to.")
-    parser.add_argument("--shift_output_file", default=None,
-                        help="""The file the assigned shiftlist will be written to.""")
     parser.add_argument("--shift_output_type", default="sparky",
                         choices=["sparky", "xeasy", "nmrpipe"],
                         help="One or more output formats for chemical shift export")
@@ -79,15 +76,12 @@ def get_arguments(system_args):
                         default=["High","Medium","Low","Unreliable","Undefined"],
                         help="""Limits the shiftlist output to assignments with
                         particular confidence levels. More than one level is allowed""")
-    parser.add_argument("--alt_assignments_output_file", default=None,
-                        help="""A file alternative assignments will be written to 
-                        (only if alt_assignments is set to >0 in config file)""")
-    parser.add_argument("--strip_plot_file",
-                        default=None,
-                        help="A filename for an output strip plot.")
-    parser.add_argument("--hsqc_plot_file",
-                        default=None,
-                        help="A filename for an output HSQC plot.")
+    parser.add_argument("--strip_plot",
+                        action="store_true",
+                        help="Output a strip plot to assess assignment quality.")
+    parser.add_argument("--hsqc_plot",
+                        action="store_true",
+                        help="Output an HSQC plot of the assignments.")
 
 
 
@@ -105,13 +99,12 @@ def get_arguments(system_args):
         #                           "--test"))
         args = parser.parse_args(("data/testset/simplified_BMRB/6357.txt",
                                   "data/testset/noshifty_results/A033_1JTGC.cs",
-                                  "output/test.txt",
+                                  r"C:\Users\chmahey\GitHub\SNAPS\output\test",
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",
-                                  "-l","output/test.log",
-                                  "--strip_plot_file", "output/strip_plot.htm",
-                                  "--hsqc_plot_file", "output/hsqc_plot.htm",
+                                  "--strip_plot",
+                                  "--hsqc_plot",
                                   "--test"))
     return(args)
 
@@ -120,25 +113,24 @@ def runSNAPS(system_args):
     #### Command line arguments
     args = get_arguments(system_args)
 
-    #### Set up logging
-    if args.log_file is not None:
-        # Create a logger
-        logger = logging.getLogger("SNAPS")
-        logger.setLevel(logging.DEBUG)
-        # Create a log handler that writes to a specific file.
-        # In principle you could have multiple handlers, but here I just have one.
-        # Need to explicitly define a handler so it can be explicitly closed
-        # once the analysis is complete.
-        log_handler = logging.FileHandler(args.log_file, mode='w')
-        log_handler.setLevel(logging.DEBUG)
-        #log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
-        log_handler.setFormatter(logging.Formatter(
-                "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
-        logger.addHandler(log_handler)
+    # Create output directory, if it doesn't already exist
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    else:
-        logging.basicConfig(level=logging.ERROR)
-        # logging.basicConfig(level=logging.DEBUG)
+    #### Set up logging
+    # Create a logger
+    logger = logging.getLogger("SNAPS")
+    logger.setLevel(logging.DEBUG)
+    # Create a log handler that writes to a specific file.
+    # In principle you could have multiple handlers, but here I just have one.
+    # Need to explicitly define a handler so it can be explicitly closed
+    # once the analysis is complete.
+    log_handler = logging.FileHandler(output_dir/"log.txt", mode='w')
+    log_handler.setLevel(logging.DEBUG)
+    #log_handler.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s %(funcName)s %(message)s"))
+    log_handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(log_handler)
 
 
     #### Set up the SNAPS_assigner object
@@ -146,8 +138,6 @@ def runSNAPS(system_args):
 
     # Import config file
     a.read_config_file(args.config_file)
-    # breakpoint()
-
 
     # Import observed and predicted shifts
     importer = SNAPS_importer()
@@ -196,18 +186,18 @@ def runSNAPS(system_args):
 
     if args.test:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=500, verbose=True, init_inc=high_conf_assn)
+        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=50, verbose=True, init_inc=high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()
         b.make_assign_df(best_matching, set_assign_df=True)
         b.add_consistency_info(threshold=0.2)
-        b.assign_df.to_csv(r"C:\Users\chmahey\GitHub\SNAPS\output\test_consistent.txt", sep="\t", float_format="%.3f",
+        b.assign_df.to_csv(output_dir/"test_consistent.txt", sep="\t", float_format="%.3f",
                            index=False)
-        b.plot_strips(r"C:\Users\chmahey\GitHub\SNAPS\output\strip_plot_consistent.htm", "html")
+        b.plot_strips(output_dir/"strip_plot_consistent.htm", "html")
         
         plt = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))
-        plt.save(r"C:\Users\chmahey\GitHub\SNAPS\output\test_history.pdf")
+        plt.save(output_dir/"test_history.pdf")
         breakpoint()
 
 
@@ -229,30 +219,30 @@ def runSNAPS(system_args):
     # with open(args.output_file, 'w') as fp:
     #     print(tabulate(table, tablefmt='plain', headers=headings), file=fp)
     
-    a.assign_df.to_csv(args.output_file, sep="\t", float_format="%.3f",
+    a.assign_df.to_csv(output_dir/"assign_df.tsv", sep="\t", float_format="%.3f",
                            index=False)
-    logger.info("Finished writing results to %s", args.output_file)
+    logger.info("Finished writing results to assign_df.tsv")
 
     if (a.pars["alt_assignments"] > 0) and args.alt_assignments_output_file is not None:
-        a.alt_assign_df.to_csv(args.alt_assignments_output_file, sep="\t", float_format="%.3f",
+        a.alt_assign_df.to_csv(output_dir/"alt_assign_df.tsv", sep="\t", float_format="%.3f",
                                 index=False)
-        logger.info("Finished writing alternative assignment results to %s", args.alt_assignments_output_file)
+        logger.info("Finished writing alternative assignment results to alt_assign_df.tsv")
 
     #### Write chemical shift lists
-    if args.shift_output_file is not None:
-        a.output_shiftlist(args.shift_output_file, args.shift_output_type,
-                           confidence_list=args.shift_output_confidence)
+    # if args.shift_output_file is not None:
+    a.output_shiftlist(output_dir/"assigned_shifts.txt", args.shift_output_type,
+                        confidence_list=args.shift_output_confidence)
 
     #### Make some plots
     plots = []
-    if args.hsqc_plot_file is not None:
-        hsqc_plot = a.plot_hsqc(args.hsqc_plot_file, "html")
-        logger.info("Finished writing HSQC plot to %s", args.hsqc_plot_file)
+    if args.hsqc_plot:
+        hsqc_plot = a.plot_hsqc(output_dir/"hsqc_plot.htm", "html")
+        logger.info("Finished writing HSQC plot to hsqc_plot.htm")
         plots += [hsqc_plot]
 
-    if args.strip_plot_file is not None:
-        strip_plot = a.plot_strips(args.strip_plot_file, "html")
-        logger.info("Finished writing strip plot to %s", args.strip_plot_file)
+    if args.strip_plot:
+        strip_plot = a.plot_strips(output_dir/"strip_plot.htm", "html")
+        logger.info("Finished writing strip plot to strip_plot.htm")
         plots += [strip_plot]
 
     # Close the log file
