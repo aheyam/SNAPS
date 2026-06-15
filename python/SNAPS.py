@@ -182,7 +182,7 @@ def runSNAPS(system_args):
     a.calc_log_prob_matrix()
     a.calc_mismatch_matrix()
 
-    if a.pars["iterate_until_consistent"]:
+    if a.pars["iterate_until_consistent"] == 1:
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
         a.assign_from_preds(set_assign_df=True)
@@ -190,21 +190,21 @@ def runSNAPS(system_args):
         if (a.pars["alt_assignments"] > 0):
             a.find_alt_assignments(N=a.pars["alt_assignments"])
             
-    if args.test is not None:
+    if a.pars["iterate_until_consistent"] == 2:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=50, verbose=True, init_inc=high_conf_assn)
+        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=100, verbose=True, init_inc=high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()
         b.make_assign_df(best_matching, set_assign_df=True)
         b.add_consistency_info(threshold=0.2)
-        b.assign_df.to_csv(output_dir/"test_consistent.txt", sep="\t", float_format="%.3f",
+        b.assign_df.to_csv(output_dir/"consistent_assign_df.tsv", sep="\t", float_format="%.3f",
                            index=False)
         b.plot_strips(output_dir/"strip_plot_consistent.htm", "html")
         
         plt = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))
-        plt.save(output_dir/"test_history.pdf")
-        breakpoint()
+        plt.save(output_dir/"test_history.pdf", verbose=False)
+        # breakpoint()
 
 
     

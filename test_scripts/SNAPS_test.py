@@ -689,7 +689,15 @@ if "consistent" in args.test or "all" in args.test:
 
         save_summary_plot(assigns_consistent, summary_consistent, out_dir)
 
-
+if "consistent_2" in args.test or "all" in args.test:
+    out_dir = "consistent_2"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "test/config_consistent_2.yaml", ["--strip_plot"])
+            run(cmd)
 
 #%% Test stuff
 
