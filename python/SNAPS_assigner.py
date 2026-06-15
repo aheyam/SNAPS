@@ -1107,7 +1107,7 @@ class SNAPS_assigner:
 
         # Calculate the value used to penalise the best match for each residue
         penalty = 2*log_prob_matrix.min().min()
-        logging.debug("Penalty value: %f", penalty)
+        self.logger.debug("Penalty value: %f", penalty)
 
         # Initialise DataFrame for storing alt_assignments
         alt_matching_all = best_matching.copy()
@@ -1117,7 +1117,7 @@ class SNAPS_assigner:
         for i in best_matching.index:   # Consider each spin system in turn
             ss = best_matching.loc[i, "SS_name"]
             res = best_matching.loc[i, "Res_name"]
-            logging.debug("Finding alt assignments for original match %s - %s", ss, res)
+            self.logger.debug("Finding alt assignments for original match %s - %s", ss, res)
             if verbose: print(ss, res)
 
             excluded = best_matching.loc[[i], :]
@@ -1990,7 +1990,7 @@ class SNAPS_assigner:
 
         if not self.sequential_atoms_present(df.columns):
             # You can't draw a strip plot
-            print("No sequential links in data - strip plot not drawn.")
+            self.logger.warning("No sequential links in data - strip plot not drawn.")
             return(None)
         else:
             #### Make a dataframe containing information needed for plotting

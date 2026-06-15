@@ -163,7 +163,7 @@ def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_
     assigns = None
     for i in ID_list:
         tmp = pd.read_csv(
-                data_dir/(prefix+testset_df.loc[i, "out_name"]+".txt"),
+                data_dir/(prefix+testset_df.loc[i, "out_name"]+"/assign_df.tsv"),
                 sep="\t", index_col=False)
         tmp["ID"] = i
 

@@ -74,7 +74,7 @@ def save_summary_plot(assigns, summary, out_dir):
     #plt = plt + scale_x_discrete(breaks=summary["ID"].tolist())
 
     plt.save(path/("plots/summary_"+out_dir+".pdf"),
-             height=210, width=297, units="mm")
+             height=210, width=297, units="mm", verbose=False)
     return(plt)
 
 def save_alt_summary_plots(assigns, summary, out_dir):
@@ -82,7 +82,7 @@ def save_alt_summary_plots(assigns, summary, out_dir):
     plt = plt + geom_bar(aes(x="ID", fill="Status"), position=position_fill(reverse=True))
     plt = plt + facet_grid("Rank ~ .")
     plt = plt + theme(axis_text_x = element_text(angle=90))
-    plt.save(path/"plots"/("summary_"+out_dir+".pdf"), height=210, width=297, units="mm")
+    plt.save(path/"plots"/("summary_"+out_dir+".pdf"), height=210, width=297, units="mm", verbose=False)
 
     tmp = summary
     tmp["Pc_correct"] = tmp["Pc_correct"].astype(float)
@@ -92,7 +92,7 @@ def save_alt_summary_plots(assigns, summary, out_dir):
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
     plt = plt + scale_y_continuous(breaks=np.linspace(0,1,11))
 
-    plt.save(path/"plots"/(out_dir+"_correct.pdf"), height=210, width=297, units="mm")
+    plt.save(path/"plots"/(out_dir+"_correct.pdf"), height=210, width=297, units="mm", verbose=False)
     return(plt)
 
 def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
@@ -101,11 +101,10 @@ def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
     cmd = [args.python_cmd, (path/"python/SNAPS.py").as_posix(),
             testset_df.loc[id, "obs_file"].as_posix(),
             testset_df.loc[id, "preds_file"].as_posix(),
-            (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".txt")).as_posix(),
+            (path/"output"/out_dir/(testset_df.loc[id, "out_name"])).as_posix(),
             "--shift_type", "test",
             "--pred_type", "shiftx2",
-            "-c", (path/"config"/config_file).as_posix(),
-            "-l", (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".log")).as_posix()]
+            "-c", (path/"config"/config_file).as_posix()]
     cmd = cmd + extra_args
 
     return(cmd)
@@ -118,9 +117,9 @@ if "basic" in args.test or "all" in args.test:
         # Create output directory, if it doesn't already exist
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
-            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"])).as_posix())
             cmd = make_cmd(i, out_dir, "test/config_basic.yaml",
-                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+                           ["--strip_plot"])
             run(cmd)
 
     if args.analyse:
@@ -142,7 +141,7 @@ if "basic" in args.test or "all" in args.test:
         plt += scale_fill_brewer("qual", palette=6)
         plt += scale_y_continuous(breaks=np.arange(0,100,10))
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster basic accuracy.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Figure showing accuracy vs number of good seq links
         # Note that NA values are always false in > or < comparisons.
@@ -153,7 +152,7 @@ if "basic" in args.test or "all" in args.test:
         plt += xlab("Number of matching neighbours") + ylab("Percentage")
         plt += scale_fill_brewer("qual", palette=6)
         plt += theme_bw()
-        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm", verbose=False)
 
         plt = ggplot(tmp) + geom_bar(aes(x="(Num_good_links_m1 + Num_good_links_p1)"+
                                      "*(Max_mismatch_m1<0.1).astype(int)"+
@@ -163,7 +162,7 @@ if "basic" in args.test or "all" in args.test:
         plt += xlab("Number of matching neighbours") + ylab("Percentage")
         plt += scale_fill_brewer("qual", palette=6)
         plt += theme_bw()
-        plt#.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Some alternate ways of assessing how good the seq links are
 #        "(Num_good_links_m1==3).astype(int)+(Num_good_links_p1==3).astype(int)"
@@ -184,7 +183,7 @@ if "basic" in args.test or "all" in args.test:
         plt += scale_fill_brewer("qual", palette=6)
 #        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster confidence.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster confidence.pdf", height=100, width=100, units="mm", verbose=False)
 
         plt = ggplot(tmp) + geom_bar(aes(x="Confidence",
                     fill="Correct"), position="fill")
@@ -193,7 +192,7 @@ if "basic" in args.test or "all" in args.test:
 #        plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
         plt += scale_y_continuous(breaks=np.linspace(0,1,11))
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster confidence accuracy.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster confidence accuracy.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Break down confidence by prev and next residues
         # S=Strong evidence for link, W=Weak, N=no links, X=mismatch
@@ -220,7 +219,7 @@ if "basic" in args.test or "all" in args.test:
         plt += scale_y_continuous(breaks=np.linspace(0,1,11))
         #plt += scale_x_discrete(breaks=["SS","SW","SN","SX","WW","WN","WX","NN","NX","XX"])
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster confidence accuracy2.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster confidence accuracy2.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Figure showing distribution of log_probabilities
         plt = ggplot(tmp[~tmp["Dummy_res"]])
@@ -228,7 +227,7 @@ if "basic" in args.test or "all" in args.test:
         plt += xlim(-50,0)
         plt += scale_fill_brewer(type="qual", palette=6)
         plt += theme_bw()
-        plt.save(path/"plots/Poster log_prob distribution.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster log_prob distribution.pdf", height=100, width=100, units="mm", verbose=False)
 
         #### Exploratory analysis
         # Make a matrix showing how often each residue type is misassigned to a different type
@@ -247,7 +246,7 @@ if "basic" in args.test or "all" in args.test:
         tmp = assigns_basic[assigns_basic["Dummy_SS"]==False].groupby("Res_type")["Correct"]
         tmp.sum()/tmp.count()
 
-        tmp = assigns_basic[(assigns_basic["Dummy_SS"]==False) & (assigns_basic["Status"]=="Misassigned")]
+        tmp = assigns_basic.loc[(assigns_basic["Dummy_SS"]==False) & (assigns_basic["Status"]=="Misassigned"), :]
         tmp.loc[:,"Type_match"] = (tmp["SS_type"]==tmp["Res_type"])
         tmp2 = tmp.groupby("SS_type")["Type_match"]
         tmp_basic=(tmp2.sum()/tmp2.count()).sort_values(ascending=False)
@@ -260,18 +259,18 @@ if "basic" in args.test or "all" in args.test:
                             ~assigns_basic["Dummy_SS"] &
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_density(aes(x="Log_prob", colour="Correct"))
-        + xlim(-100, 0) ).save(path/"plots/basic_log_probability_A006.pdf")
+        + xlim(-100, 0) ).save(path/"plots/basic_log_probability_A006.pdf", verbose=False)
 
         tmp = assigns_basic[~assigns_basic["Dummy_SS"] &
                             ~assigns_basic["Dummy_res"]]
         (ggplot(tmp) + geom_boxplot(aes(y="Log_prob", x="ID", colour="Correct"))
-        + ylim(-100,0) ).save(path/"plots/basic_log_probability_boxplot.pdf")
+        + ylim(-100,0) ).save(path/"plots/basic_log_probability_boxplot.pdf", verbose=False)
 
         # Check whether accuracy is related to protein size
         tmp = summary_basic
         tmp.N_SS = tmp.N_SS.astype(float)
         tmp.Pc_correct = tmp.Pc_correct.astype(float)
-        (ggplot(tmp) + geom_point(aes(x="N_SS", y="Pc_correct"))).save(path/"plots/basic_accuracy_vs_size.pdf")
+        (ggplot(tmp) + geom_point(aes(x="N_SS", y="Pc_correct"))).save(path/"plots/basic_accuracy_vs_size.pdf", verbose=False)
 
 #%% Test effect of correcting the predicted shifts
 if "pred_correction" in args.test or "all" in args.test:
@@ -379,8 +378,7 @@ if "hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "test/config_hnco.yaml",
-                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_hnco.yaml", ["--strip_plot"])
             run(cmd)
     if args.analyse:
         assigns_hnco = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -413,8 +411,7 @@ if "hnco_hnca" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "test/config_hnco_hnca.yaml",
-                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_hnco_hnca.yaml", ["--strip_plot"])
             run(cmd)
     if args.analyse:
         assigns_hnco_hnca = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -430,8 +427,7 @@ if "no_CB" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "test/config_no_CB.yaml",
-                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_no_CB.yaml", ["--strip_plot"])
             run(cmd)
     if args.analyse:
         assigns_no_CB = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -447,8 +443,7 @@ if "no_CO" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
-            cmd = make_cmd(i, out_dir, "test/config_no_CO.yaml",
-                           ["--strip_plot_file", (path/"plots"/out_dir/(testset_df.loc[i, "out_name"]+"_strips.html")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_no_CO.yaml", ["--strip_plot"])
             run(cmd)
     if args.analyse:
         assigns_no_CO = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
@@ -483,7 +478,7 @@ if False:
     plt += scale_fill_brewer("qual", palette=6)
     plt += scale_y_continuous(breaks=np.linspace(0,100,11))
     plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-    plt.save(path/"plots/Poster reduced atoms accuracy.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/Poster reduced atoms accuracy.pdf", height=100, width=100, units="mm", verbose=False)
 
     # Break down assignment confidence
     conf_type = pd.api.types.CategoricalDtype(["High","Medium","Low",
@@ -501,7 +496,7 @@ if False:
     plt += scale_fill_brewer("qual", palette=6)
     plt += scale_y_continuous(breaks=np.linspace(0,100,11))
     plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-    plt.save(path/"plots/Poster reduced atoms confidence.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/Poster reduced atoms confidence.pdf", height=100, width=100, units="mm", verbose=False)
 
 
 #%% Test alternative assignments with and without HADAMAC
@@ -512,9 +507,7 @@ if "alt_assign" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_assign.yaml", 
-                           ["--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_alt_assign.yaml")
             run(cmd)
 
     if args.analyse:
@@ -534,9 +527,7 @@ if "alt_hadamac" in args.test or "all" in args.test:
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
             cmd = make_cmd(i, out_dir, "test/config_alt_hadamac.yaml",
-                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML", 
-                            "--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
     if args.analyse:
@@ -557,8 +548,7 @@ if "alt_hnco" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_hnco.yaml", ["--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco.yaml")
             run(cmd)
 
     if args.analyse:
@@ -578,9 +568,7 @@ if "alt_hnco_hadamac" in args.test or "all" in args.test:
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
             cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hadamac.yaml",
-                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML", 
-                            "--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+                           ["--test_aa_classes", "ACDEFGHIKLMNPQRSTVWY;G,S,T,AVI,DN,FHYWC,REKPQML"])
             run(cmd)
 
     if args.analyse:
@@ -600,8 +588,7 @@ if "alt_hnco_hncacb" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hncacb.yaml", ["--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_alt_hnco_hncacb.yaml")
             run(cmd)
 
     if args.analyse:
@@ -621,8 +608,7 @@ if "alt_ca_co" in args.test or "all" in args.test:
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
         for i in id_all_carbons:
             print(testset_df.loc[i, "out_name"])
-            cmd = make_cmd(i, out_dir, "test/config_alt_ca_co.yaml", ["--alt_assignments_output_file", 
-                            (path/"output"/out_dir/(testset_df.loc[i, "out_name"]+"_alt.txt")).as_posix()])
+            cmd = make_cmd(i, out_dir, "test/config_alt_ca_co.yaml")
             run(cmd)
 
     if args.analyse:
@@ -661,7 +647,7 @@ if False:       # Temporarily removed this test
         plt += scale_fill_brewer("qual", palette=6)
         plt += scale_y_continuous(breaks=np.arange(0,100,10))
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster iterated accuracy.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster iterated accuracy.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Figures showing confidence proportion and accuracy
         conf_type = pd.api.types.CategoricalDtype(["Strong","Weak","Uncertain",
@@ -675,7 +661,7 @@ if False:       # Temporarily removed this test
         plt += scale_fill_brewer("qual", palette=6)
         plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster confidence iterated.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster confidence iterated.pdf", height=100, width=100, units="mm", verbose=False)
 
         plt = ggplot(tmp) + geom_bar(aes(x="Confidence",
                     fill="Correct"), position="fill")
@@ -683,7 +669,7 @@ if False:       # Temporarily removed this test
         plt += scale_fill_brewer("qual", palette=6)
         plt += scale_x_discrete(breaks=["Strong","Weak","Uncertain","Mismatched","Dummy_res"])
         plt += theme_bw() + theme(axis_text_x = element_text(angle=90))
-        plt.save(path/"plots/Poster confidence accuracy iterated.pdf", height=100, width=100, units="mm")
+        plt.save(path/"plots/Poster confidence accuracy iterated.pdf", height=100, width=100, units="mm", verbose=False)
 
 #%% Test consistent assignment
 if "consistent" in args.test or "all" in args.test:

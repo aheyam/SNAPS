@@ -179,11 +179,8 @@ def runSNAPS(system_args):
         a.assign_from_preds(set_assign_df=True)
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
         if (a.pars["alt_assignments"] > 0):
-            if args.alt_assignments_output_file is not None:
-                a.find_alt_assignments(N=a.pars["alt_assignments"])
-            else:
-                logger.warning("alt_assignments > 0 but no alt_assignments_output_file defined - skipping alt assignment")
-
+            a.find_alt_assignments(N=a.pars["alt_assignments"])
+            
     if args.test:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
         node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=50, verbose=True, init_inc=high_conf_assn)
@@ -223,13 +220,12 @@ def runSNAPS(system_args):
                            index=False)
     logger.info("Finished writing results to assign_df.tsv")
 
-    if (a.pars["alt_assignments"] > 0) and args.alt_assignments_output_file is not None:
+    if (a.pars["alt_assignments"] > 0):
         a.alt_assign_df.to_csv(output_dir/"alt_assign_df.tsv", sep="\t", float_format="%.3f",
                                 index=False)
         logger.info("Finished writing alternative assignment results to alt_assign_df.tsv")
 
     #### Write chemical shift lists
-    # if args.shift_output_file is not None:
     a.output_shiftlist(output_dir/"assigned_shifts.txt", args.shift_output_type,
                         confidence_list=args.shift_output_confidence)
 
