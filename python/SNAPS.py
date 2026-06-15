@@ -63,8 +63,8 @@ def get_arguments(system_args):
                         of the simulated shifts for each atom type.""")
     parser.add_argument("--sim_pred_seed", type=int, default=0,
                         help="Random seed used if simulate_pred_shifts is True")
-    parser.add_argument("--test", action="store_true",
-                        help="Test SNAPS using example data")
+    parser.add_argument("--test", default=None,
+                        help="Test SNAPS using example data from the specified test protein")
     #TODO: Need to rethink how SS_class info is imported.
 
     # Options controlling output files
@@ -86,7 +86,7 @@ def get_arguments(system_args):
 
 
     args = parser.parse_args(system_args)
-    if args.test:   # For convenience when testing
+    if args.test is not None:   # For convenience when testing
         # args = parser.parse_args(("data/P3a_L273R/naps_shifts.txt",
         #                           "data/P3a_L273R/shiftx2.cs",
         #                           "output/test.txt",
@@ -97,15 +97,24 @@ def get_arguments(system_args):
         #                           "--strip_plot_file", "output/strip_plot.htm",
         #                           "--hsqc_plot_file", "output/hsqc_plot.htm",
         #                           "--test"))
-        args = parser.parse_args(("data/testset/simplified_BMRB/6357.txt",
-                                  "data/testset/noshifty_results/A033_1JTGC.cs",
-                                  r"C:\Users\chmahey\GitHub\SNAPS\output\test",
+        import pandas as pd
+
+        testset_df = pd.read_table("data/testset/testset.txt", header=None,
+                                names=["ID","PDB","BMRB","Resolution","Length"])
+        testset_df["obs_file"] = [x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
+        testset_df["preds_file"] = [x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
+        testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
+        testset_df.index = testset_df["ID"]
+
+        args = parser.parse_args((testset_df.loc[args.test, "obs_file"],
+                                  testset_df.loc[args.test, "preds_file"],
+                                  "output/test",
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",
                                   "--strip_plot",
                                   "--hsqc_plot",
-                                  "--test"))
+                                  "--test", args.test))
     return(args)
 
 def runSNAPS(system_args):
@@ -181,7 +190,7 @@ def runSNAPS(system_args):
         if (a.pars["alt_assignments"] > 0):
             a.find_alt_assignments(N=a.pars["alt_assignments"])
             
-    if args.test:
+    if args.test is not None:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
         node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=50, verbose=True, init_inc=high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med).idxmax()
