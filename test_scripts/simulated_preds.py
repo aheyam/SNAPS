@@ -48,11 +48,10 @@ def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
     cmd = [args.python_cmd, (path/"python/SNAPS.py").as_posix(),
             testset_df.loc[id, "obs_file"].as_posix(),
             testset_df.loc[id, "preds_file"].as_posix(),
-            (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".txt")).as_posix(),
+            (path/"output"/out_dir/(testset_df.loc[id, "out_name"])).as_posix(),
             "--shift_type", "test",
             "--pred_type", "shiftx2",
-            "-c", (path/"config"/config_file).as_posix(),
-            "-l", (path/"output"/out_dir/(testset_df.loc[id, "out_name"]+".log")).as_posix()]
+            "-c", (path/"config"/config_file).as_posix()]
     cmd = cmd + extra_args
 
     return(cmd)
@@ -89,7 +88,7 @@ if args.analyse:
     plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/sim preds accuracy carbons.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/sim preds accuracy carbons.pdf", height=100, width=100, units="mm", verbose=False)
 
     # Plot assignment accuracy against protein size, faceted by error
     summary_all = None
@@ -108,7 +107,7 @@ if args.analyse:
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/sim preds accuracy carbons - size.pdf", height=200, width=200, units="mm")
+    plt.save(path/"plots/sim preds accuracy carbons - size.pdf", height=200, width=200, units="mm", verbose=False)
 
 # Simulate predicted shifts with only H and N
 error_multipliers = [0, 0.005, 0.01, 0.015, 0.02, 0.025,0.05,0.075,0.1,0.15, 0.2, 0.25]
@@ -142,7 +141,7 @@ if args.analyse:
     plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/sim preds accuracy HN.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/sim preds accuracy HN.pdf", height=100, width=100, units="mm", verbose=False)
 
     # Plot assignment accuracy against protein size, faceted by error
     summary_all = None
@@ -161,7 +160,7 @@ if args.analyse:
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/sim preds accuracy HN - size.pdf", height=200, width=200, units="mm")
+    plt.save(path/"plots/sim preds accuracy HN - size.pdf", height=200, width=200, units="mm", verbose=False)
 
 # Simulate predicted shifts with 10% error and various sets of atoms, to test effect of number of atoms on assignment accuracy
 atom_sets = ["HN","HNCO", "4_C_m1+CA", "6_CO+CA", "6_CA+CB", "all_carbons"]
@@ -211,7 +210,7 @@ if args.analyse:
     plt = plt + ylab("Accuracy (%)") + xlab("Number of residues")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/sim preds accuracy - number of atoms.pdf", height=100, width=500, units="mm")
+    plt.save(path/"plots/sim preds accuracy - number of atoms.pdf", height=100, width=500, units="mm", verbose=False)
 #%%
 if False: 
     a = SNAPS_assigner()
@@ -410,7 +409,7 @@ if False:
     plt = plt + ylab("Accuracy (%)") + xlab("Error (% of 95% interval)")
     plt = plt + scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     plt += theme_bw()
-    plt.save(path/"plots/Poster sim preds accuracy.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/Poster sim preds accuracy.pdf", height=100, width=100, units="mm", verbose=False)
     #plt = ggplot(data=assigns_shiftx2) 
     #plt = plt + geom_bar(aes(x="ID", fill="Status"), 
     #                     position=position_fill(reverse=True))
@@ -444,4 +443,4 @@ if False:
     plt += scale_y_continuous(breaks=np.arange(0,101,10), limits=(0,100)) 
     #plt += scale_x_continuous(breaks=np.arange(0,16,2))
     plt += theme_bw()
-    plt.save(path/"plots/Poster sim preds accuracy HN.pdf", height=100, width=100, units="mm")
+    plt.save(path/"plots/Poster sim preds accuracy HN.pdf", height=100, width=100, units="mm", verbose=False)
