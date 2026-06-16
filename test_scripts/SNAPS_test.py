@@ -71,7 +71,7 @@ def save_summary_plot(assigns, summary, out_dir):
     plt = plt + geom_text(aes(x="summary.index", label="Pc_correct"), y=0.1,
                           format_string="{:.1f}", data=summary, angle=90)
     plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
-    #plt = plt + scale_x_discrete(breaks=summary["ID"].tolist())
+    # plt = plt + scale_x_discrete(breaks=summary["ID"].tolist())
 
     plt.save(path/("plots/summary_"+out_dir+".pdf"),
              height=210, width=297, units="mm", verbose=False)
@@ -702,6 +702,14 @@ if "consistent_2" in args.test or "all" in args.test:
     if args.analyse:
         assigns_consistent_2 = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all, assignment_file="consistent_assign_df.tsv")
         summary_consistent_2 = summarise_results(assigns_consistent_2)
+
+        summary_consistent_2["Nodes"] = 0
+        summary_consistent_2["Iterations"] = 0
+        for i in id_all:
+            tmp = pd.read_csv(path/"output"/out_dir/testset_df.loc[i, "out_name"]/"node_df.tsv", sep="\t")
+            summary_consistent_2.loc[summary_consistent_2.ID==i, "Iterations"] = tmp.Iteration.max()
+            summary_consistent_2.loc[summary_consistent_2.ID==i, "Nodes"] = len(tmp.index)
+            
         summary_consistent_2.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
 
         save_summary_plot(assigns_consistent_2, summary_consistent_2, out_dir)
