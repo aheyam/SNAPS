@@ -153,7 +153,7 @@ def check_assignment_accuracy(data_dir, testset_df, ID_list,
                              summary["Correctly unassigned"]) / summary["N_SS"]
     return([assigns, summary])
 
-def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_file=None):
+def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", assignment_file="assign_df.tsv", output_file=None):
     """Function to check assignment accuracy
 
     Returns the complete set of assignments for all proteins
@@ -163,7 +163,7 @@ def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", output_
     assigns = None
     for i in ID_list:
         tmp = pd.read_csv(
-                data_dir/(prefix+testset_df.loc[i, "out_name"]+"/assign_df.tsv"),
+                data_dir/(prefix+testset_df.loc[i, "out_name"]+"/"+assignment_file),
                 sep="\t", index_col=False)
         tmp["ID"] = i
 

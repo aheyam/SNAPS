@@ -53,8 +53,8 @@ id_all_carbons = [
         'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009', 'A010', 'A011',
         'A012', 'A013', 'A014', 'A015', 'A016', 'A017', 'A018', 'A019', 'A020',
         'A021', 'A023', 'A025', 'A026', 'A027', 'A028', 'A029', 'A033', 'A035',
-        'A036', 'A037', 'A039', 'A043', 'A044', 'A045', 'A049', 'A050', 'A051',
-        'A053', 'A059', 'A061', 'A062', 'A066', 'A067', 'A069']
+        'A036', 'A037', 'A039', 'A043', 'A045', 'A049', 'A050', 'A051', 'A053', 
+        'A059', 'A061', 'A062', 'A066', 'A067', 'A069']
 
 id_missing_carbons = list(set(id_all) - set(id_all_carbons))
 
@@ -162,7 +162,7 @@ if "basic" in args.test or "all" in args.test:
         plt += xlab("Number of matching neighbours") + ylab("Percentage")
         plt += scale_fill_brewer("qual", palette=6)
         plt += theme_bw()
-        plt.save(path/"plots/Poster basic seq links.pdf", height=100, width=100, units="mm", verbose=False)
+        plt.save(path/"plots/Poster basic seq links 2.pdf", height=100, width=100, units="mm", verbose=False)
 
         # Some alternate ways of assessing how good the seq links are
 #        "(Num_good_links_m1==3).astype(int)+(Num_good_links_p1==3).astype(int)"
@@ -698,6 +698,13 @@ if "consistent_2" in args.test or "all" in args.test:
             print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
             cmd = make_cmd(i, out_dir, "test/config_consistent_2.yaml", ["--strip_plot"])
             run(cmd)
+    
+    if args.analyse:
+        assigns_consistent_2 = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all, assignment_file="consistent_assign_df.tsv")
+        summary_consistent_2 = summarise_results(assigns_consistent_2)
+        summary_consistent_2.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+
+        save_summary_plot(assigns_consistent_2, summary_consistent_2, out_dir)
 
 #%% Test stuff
 

@@ -200,6 +200,7 @@ def runSNAPS(system_args):
         b.add_consistency_info(threshold=0.2)
         b.assign_df.to_csv(output_dir/"consistent_assign_df.tsv", sep="\t", float_format="%.3f",
                            index=False)
+        node_df.to_csv(output_dir/"node_df.tsv", sep="\t", float_format="%.3f", index=False)
         b.plot_strips(output_dir/"strip_plot_consistent.htm", "html")
         
         plt = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))

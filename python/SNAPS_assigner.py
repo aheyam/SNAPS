@@ -1654,6 +1654,8 @@ class SNAPS_assigner:
                 "Worst_mismatch": consistency_df.Max_mismatch.max(),
                 "N_high": (consistency_df.Confidence=="High").sum(), 
                 "N_med": (consistency_df.Confidence=="Medium").sum(),
+                "N_mismatch": (consistency_df.Max_mismatch_p1>=threshold).sum(),
+                "Total_mismatch": consistency_df.Max_mismatch_p1.sum(),
                 "Matching": best_matching,
                 "Inc": init_inc, "Exc": init_exc,
                 "N_inc": 0, "N_exc": 0 }])
@@ -1816,6 +1818,8 @@ class SNAPS_assigner:
                             "Worst_mismatch": new_consistency_df.Max_mismatch.max(),
                             "N_high": (new_consistency_df.Confidence=="High").sum(), 
                             "N_med": (new_consistency_df.Confidence=="Medium").sum(),
+                            "N_mismatch": (new_consistency_df.Max_mismatch_p1>=threshold).sum(),
+                            "Total_mismatch": new_consistency_df.Max_mismatch_p1.sum(),
                             "Matching": matching,
                             "Inc": inc_assn, "Exc": exc_assn,
                             "N_inc": inc_assn.index.size, "N_exc": exc_mask.sum().sum() }])
