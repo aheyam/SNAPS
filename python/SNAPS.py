@@ -111,7 +111,7 @@ def get_arguments(system_args):
                                   "output/test",
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
-                                  "-c","config/config_yaml_2.txt",
+                                  "-c","config/test/config_consistent_2.yaml",
                                   "--strip_plot",
                                   "--hsqc_plot",
                                   "--test", args.test))
@@ -192,7 +192,13 @@ def runSNAPS(system_args):
             
     if a.pars["iterate_until_consistent"] == 2:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=100, verbose=True, init_inc=high_conf_assn)
+        a.assign_df = a.assign_df.sort_values("Res_N")
+        a.assign_df["Confidence_m1"] = a.assign_df.Confidence.shift(1)
+        a.assign_df["Confidence_p1"] = a.assign_df.Confidence.shift(-1)
+        very_high_conf_assn = a.assign_df.loc[(a.assign_df.Confidence=="High") &
+                                              (a.assign_df.Confidence_m1=="High") &
+                                              (a.assign_df.Confidence_p1=="High"), ["Res_name", "SS_name"]]
+        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=500, verbose=True, init_inc=very_high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med - node_df.N_mismatch).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()
