@@ -1657,6 +1657,7 @@ class SNAPS_assigner:
                 "N_mismatch": (consistency_df.Max_mismatch_p1>=threshold).sum(),
                 "Total_mismatch": consistency_df.Max_mismatch_p1.sum(),
                 "Delta_mismatch": 0,
+                "Chosen_mismatch": 0,
                 "Matching": best_matching,
                 "Inc": init_inc, "Exc": init_exc,
                 "N_inc": 0, "N_exc": 0 }])
@@ -1665,7 +1666,7 @@ class SNAPS_assigner:
         # Main loop: create and check new nodes until a consistent assignment is found, or iteration limit is reached
         iterations = 0
         while True:
-            
+            if iterations > 100: breakpoint()
             # breakpoint()
 
             # Choose the highest-scoring unranked node
@@ -1673,19 +1674,21 @@ class SNAPS_assigner:
             # next_node_index = (node_df.loc[~node_df.Ranked, "Sum_log_prob"] - node_df.loc[~node_df.Ranked, "N_mismatch"]).idxmax()
             # next_node_index = (node_df.loc[~node_df.Ranked, "N_high"] + node_df.loc[~node_df.Ranked, "N_med"]).idxmax()
             next_node_index = node_df.loc[~node_df.Ranked, :].sort_values(["Delta_mismatch","N_mismatch", "N_high","N_med"],ascending=[True, True, False, False]).index[0]
+            next_node_index = node_df.loc[~node_df.Ranked, :].sort_values(["Delta_mismatch","N_mismatch", "N_high","N_med","Sum_log_prob"],ascending=[True, True, False, False, False]).index[0]
             current_node = node_df.loc[next_node_index,:].copy()
             node_df.loc[next_node_index, "Iteration"] = iterations
 
             # Choose which mismatch will be used to create child nodes
             consistency_df = self.check_matching_consistency(current_node.Matching, threshold=threshold).sort_values("Res_name")
-            consistency_df["Res_name_m1"] = consistency_df.Res_name.shift(1)
-            consistency_df["Res_name_p1"] = consistency_df.Res_name.shift(-1)
+            
  
             # Choose the largest mismatch
             # res_A = consistency_df.Max_mismatch_p1.idxmax()
             # res_B = consistency_df.Max_mismatch_m1.idxmax()
 
             # Prioritising mismatches where at least one pair has good links
+            consistency_df["Res_name_m1"] = consistency_df.Res_name.shift(1)
+            consistency_df["Res_name_p1"] = consistency_df.Res_name.shift(-1)
             consistency_df["Priority"] = 0.0
             consistency_df.loc[(consistency_df.Num_good_links_m1<0) &
                                (consistency_df.Max_mismatch_m1<threshold) &
@@ -1803,7 +1806,9 @@ class SNAPS_assigner:
                             "N_med": (new_consistency_df.Confidence=="Medium").sum(),
                             "N_mismatch": (new_consistency_df.Max_mismatch_p1>=threshold).sum(),
                             "Total_mismatch": new_consistency_df.Max_mismatch_p1.sum(),
-                            "Delta_mismatch": - current_node.N_mismatch + (new_consistency_df.Max_mismatch_p1>=threshold).sum(),
+                            "Delta_mismatch": min(0, (new_consistency_df.Max_mismatch_p1>=threshold).sum()- current_node.N_mismatch),   
+                                            # Change in mismatches relative to parent, but capped at +0. So fewer mismatches results in a -ve value, increased mismatches gives 0.
+                            "Chosen_mismatch": self.preds.loc[res_A, "Res_N"],
                             "Matching": matching,
                             "Inc": inc_assn, "Exc": exc_assn,
                             "N_inc": inc_assn.index.size, "N_exc": exc_mask.sum().sum() }])
@@ -1817,7 +1822,6 @@ class SNAPS_assigner:
 
             # If a consistent assignment has been found, exit the loop
             if current_node.Worst_mismatch < threshold:
-                breakpoint()
                 break
             
             if verbose: print(iterations, current_node.ID, current_node.Parent, current_node.Depth,
@@ -1827,9 +1831,9 @@ class SNAPS_assigner:
             iterations += 1
             # Exit the loop if max iterations reached
             if iterations >= max_iterations:
-                breakpoint()
                 break
-
+        
+        # breakpoint()
         return(node_df)
 
     def find_seq_assignment(self):

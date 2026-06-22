@@ -198,7 +198,7 @@ def runSNAPS(system_args):
         very_high_conf_assn = a.assign_df.loc[(a.assign_df.Confidence=="High") &
                                               (a.assign_df.Confidence_m1=="High") &
                                               (a.assign_df.Confidence_p1=="High"), ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=500, verbose=True, init_inc=very_high_conf_assn)
+        node_df = a.find_consistent_assignments_4(threshold=0.2, max_iterations=200, verbose=True, init_inc=very_high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med - node_df.N_mismatch).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()
@@ -209,8 +209,19 @@ def runSNAPS(system_args):
         node_df.to_csv(output_dir/"node_df.tsv", sep="\t", float_format="%.3f", index=False)
         b.plot_strips(output_dir/"strip_plot_consistent.htm", "html")
         
-        plt = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))
-        plt.save(output_dir/"test_history.pdf", verbose=False)
+        # breakpoint()
+
+        plt1 = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="ID2", color="N_high+N_med"))
+        plt2 = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="Sum_log_prob", color="N_high+N_med"))
+        plt3 = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="N_mismatch", color="N_high+N_med"))
+        plt4 = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="Total_mismatch", color="N_high+N_med"))
+        plt5 = ggplot(node_df[node_df.Ranked]) + geom_point(aes(x="Iteration",y="Chosen_mismatch", color="N_high+N_med"))
+        plt1.save(output_dir/"test_history.pdf", verbose=False)
+        plt2.save(output_dir/"test_history_probability.pdf", verbose=False)
+        plt3.save(output_dir/"test_history_mismatches.pdf", verbose=False)
+        plt4.save(output_dir/"test_history_total_mismatch.pdf", verbose=False)
+        plt5.save(output_dir/"test_history_chosen_mismatch.pdf", verbose=False)
+        
         # breakpoint()
 
 
