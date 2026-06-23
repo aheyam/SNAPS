@@ -52,8 +52,11 @@ id_all = testset_df["ID"].tolist()  # All ID's
 id_all_carbons = [
         'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009', 'A010', 'A011',
         'A012', 'A013', 'A014', 'A015', 'A016', 'A017', 'A018', 'A019', 'A020',
-        'A021', 'A023', 'A025', 'A026', 'A027', 'A028', 'A029', 'A033', 'A035',
-        'A036', 'A037', 'A039', 'A043', 'A045', 'A049', 'A050', 'A051', 'A053', 
+        # 'A021', 'A023', 'A025', 'A026', 'A027', 'A028', 'A029', 'A033', 'A035',
+        'A023', 'A025', 'A026', 'A027', 'A028', 'A029', 'A033', 'A035',
+        'A036', 'A037', 'A039', 'A043', 'A045', 
+        # 'A049', 
+        'A050', 'A051', 'A053', 
         'A059', 'A061', 'A062', 'A066', 'A067', 'A069']
 
 id_missing_carbons = list(set(id_all) - set(id_all_carbons))
@@ -700,12 +703,12 @@ if "consistent_2" in args.test or "all" in args.test:
             run(cmd)
     
     if args.analyse:
-        assigns_consistent_2 = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all, assignment_file="consistent_assign_df.tsv")
+        assigns_consistent_2 = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all_carbons, assignment_file="consistent_assign_df.tsv")
         summary_consistent_2 = summarise_results(assigns_consistent_2)
 
         summary_consistent_2["Nodes"] = 0
         summary_consistent_2["Iterations"] = 0
-        for i in id_all:
+        for i in id_all_carbons:
             tmp = pd.read_csv(path/"output"/out_dir/testset_df.loc[i, "out_name"]/"node_df.tsv", sep="\t")
             summary_consistent_2.loc[summary_consistent_2.ID==i, "Iterations"] = tmp.Iteration.max()
             summary_consistent_2.loc[summary_consistent_2.ID==i, "Nodes"] = len(tmp.index)

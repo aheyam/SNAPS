@@ -799,12 +799,11 @@ class SNAPS_assigner:
 
         self.logger.debug("Started linear assignment")
 
-        if exc_mask is not None:
-            if maximise:
-                penalty = -2*score_matrix.abs().max().max()
-            else:
-                penalty = 2*score_matrix.abs().max().max()
-            
+        if maximise:
+            penalty = -2*score_matrix.abs().max().max()
+        else:
+            penalty = 2*score_matrix.abs().max().max()
+        if exc_mask is not None:    
             score_matrix = score_matrix.mask(exc_mask, other=penalty)
 
         if inc is not None:
@@ -1666,7 +1665,7 @@ class SNAPS_assigner:
         # Main loop: create and check new nodes until a consistent assignment is found, or iteration limit is reached
         iterations = 0
         while True:
-            if iterations > 100: breakpoint()
+            # if iterations > 100: breakpoint()
             # breakpoint()
 
             # Choose the highest-scoring unranked node
@@ -1735,6 +1734,8 @@ class SNAPS_assigner:
                 exc_assn["Res_SS"] = exc_assn.Res_name + exc_assn.SS_name
                 inc_assn = inc_assn.drop_duplicates("Res_SS").reset_index(drop=True)
                 exc_assn = exc_assn.drop_duplicates("Res_SS").reset_index(drop=True)
+                # inc_assn.index = inc_assn.Res_name
+                # inc_assn.index = inc_assn.Res_name
 
                 # Exclude any assignments that are inconsistent with the included residues
                 exc_mask = pd.DataFrame(data=False, index=self.log_prob_matrix.index, columns=self.log_prob_matrix.columns)
@@ -1763,10 +1764,18 @@ class SNAPS_assigner:
 
                 # Discard node if the constraints are inconsistent
                 # (ie. if any assignments are both included and excluded)
+                
+                inconsistent_constraints = False
                 for i in inc_assn.index:
                     if exc_mask.loc[inc_assn.SS_name[i], inc_assn.Res_name[i]]:
-                        self.logger.info("Inconsistent contraints found for new node - discarded")
-                        continue
+                        inconsistent_constraints = True
+                        break
+                # if iterations > 100: breakpoint()
+                if inconsistent_constraints:
+                    self.logger.info("Inconsistent contraints found for child %s of node %d, so it was discarded" % (child, current_node.ID))
+                    # breakpoint()
+                    continue
+
 
                 # Find the best matching
                 # if inc_assn.shape[0]==0:    # If there are no included residues, faster to replace with None
@@ -1779,9 +1788,17 @@ class SNAPS_assigner:
                     # If the non-constrained residues or spin systems are all
                     # dummies, find_best_assignment will return None, and this
                     # node can be discarded
-                    self.logger.info("No matching found")
+                    self.logger.info("No matching found for child %s of node %d, so it was discarded" % (child, current_node.ID))
+                    # breakpoint()
                     continue
                 
+                # Check whether any excluded assignments hae made it into the matching.
+                tmp = df_lookup(exc_mask, matching.SS_name, matching.Res_name)
+                if tmp.sum() >0:
+                    self.logger.info("Excluded assignments present in matching for child %s of node %d, so it was discarded" % (child, current_node.ID))
+                    # breakpoint()
+                    continue
+
                 # Add node to node_df
                 matching.index = matching["Res_name"]
                 matching.index.name = None
