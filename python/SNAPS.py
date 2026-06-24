@@ -41,6 +41,13 @@ def get_arguments(system_args):
                         choices=["shiftx2", "sparta+"],
                         default="shiftx2",
                         help="The format of the predicted shifts")
+    parser.add_argument("--seq_file", default=None,
+                        help="""A fasta file containing the protein sequence corresponding to the observed data.
+                        Note that it does not have to exactly match the sequence used for shift prediction.""")
+    parser.add_argument("--seq_numbering", default=1, 
+                        help="""Information on how the sequence is numbered. Several options:
+                        If a single number is given, this is used for the first residue in the sequence.
+                        If a comma separated list of ranges is given (eg "-5:10,15:100"), the numbering will be discontinuous""")
     parser.add_argument("--pred_seq_offset", type=int, default=0,
                         help="""An offset to apply to the residue numbering in
                         the predicted shifts.""")
@@ -109,6 +116,7 @@ def get_arguments(system_args):
         args = parser.parse_args((testset_df.loc[args.test, "obs_file"],
                                   testset_df.loc[args.test, "preds_file"],
                                   "output/test",
+                                  "--seq_file", "data/testset/BMRB_seqs/"+testset_df.loc[args.test, "BMRB"].astype(str)+".txt",
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
                                   "-c","config/test/config_consistent_2.yaml",
@@ -177,6 +185,12 @@ def runSNAPS(system_args):
     else:
         a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
 
+    # Import sequence if available, and align predicted shifts
+    if args.seq_file is not None:
+        breakpoint()
+        a.import_sequence(args.seq_file, args.seq_numbering)
+
+
     #### Do the analysis
     a.prepare_obs_preds()
     a.calc_log_prob_matrix()
@@ -198,7 +212,7 @@ def runSNAPS(system_args):
         very_high_conf_assn = a.assign_df.loc[(a.assign_df.Confidence=="High") &
                                               (a.assign_df.Confidence_m1=="High") &
                                               (a.assign_df.Confidence_p1=="High"), ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=400, verbose=True, init_inc=very_high_conf_assn)
+        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=200, verbose=True, init_inc=very_high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med - node_df.N_mismatch).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()

@@ -142,13 +142,13 @@ class SNAPS_assigner:
                          % filename)
         return(self.pars)
 
-    def import_sequence(self, filename, filetype="snaps"):
+    def import_sequence(self, filename, seq_numbering=1, filetype="text"):
         """ Imports the protein sequence
 
         The sequence information is used to fill in any gaps if prediction
         information is missing. It can also be used if the residue numbering is
         discontinuous. The sequence file should be in FASTA format, and the
-        sequence id should be either:
+        sequence numbering should be either:
             1) the residue number of the first amino acid, or
             2) a comma separated list of residue ranges eg -5:10,15:100 (this is
             for proteins with discontinuous sequence numbering)
@@ -158,27 +158,34 @@ class SNAPS_assigner:
         filename: path to file containing sequence information
         """
 
-        fasta_records = SeqIO.parse(open(filename),"fasta")
-        record1 = next(fasta_records)
-
         # Parse the sequence
-        seq_list = list(str(record1.seq))
+        if filetype=="fasta":
+            fasta_records = SeqIO.parse(open(filename),"fasta")
+            record1 = next(fasta_records)
+            seq_list = list(str(record1.seq))
+        elif filetype=="text":
+            with open(filename, 'r') as file:
+                seq_list = list("".join(file.read().split()))
 
-        # Parse the fasta id and make a list of residue numbers
-        tmp = record1.id.split(",")
-        if len(tmp)==1:     # If id was "123" or "123-456"
-            tmp2 = tmp[0].split(":")
-            if len(tmp2)==1:        # If id was "123"
-                res_N_start = int(tmp2[0])
-                res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
-            else:                   # If id was "123-456"
-                start, end = tmp2
-                res_N_list = list(range(int(start), int(end)+1))
-        else:               # If id was "123-200,300-456"
-            res_N_list = []
-            for x in tmp:
-                start, end = x.split(":")
-                res_N_list += list(range(int(start), int(end)+1))
+        # Parse the sequence numbering information and make a list of residue numbers
+        if type(seq_numbering)==int:
+            res_N_start = seq_numbering
+            res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
+        else:
+            tmp = seq_numbering.split(",")
+            if len(tmp)==1:     # If id was "123" or "123-456"
+                tmp2 = tmp[0].split(":")
+                if len(tmp2)==1:        # If id was "123"
+                    res_N_start = int(tmp2[0])
+                    res_N_list = list(range(res_N_start, res_N_start+len(seq_list)))
+                else:                   # If id was "123-456"
+                    start, end = tmp2
+                    res_N_list = list(range(int(start), int(end)+1))
+            else:               # If id was "123-200,300-456"
+                res_N_list = []
+                for x in tmp:
+                    start, end = x.split(":")
+                    res_N_list += list(range(int(start), int(end)+1))
 
         # Check res_N_list and seq_list are the same length, and correct if not
         if len(res_N_list) > len(seq_list):
@@ -1705,6 +1712,7 @@ class SNAPS_assigner:
                 res_B = consistency_df.Res_name_p1[next_res]
 
             # prepare dataframes for including/excluding assignments
+            breakpoint()
             assn_df_A = current_node.Matching.loc[[res_A], :]
             assn_df_B = current_node.Matching.loc[[res_B], :]
             assn_df_AB = current_node.Matching.loc[[res_A,res_B], :]
