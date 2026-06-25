@@ -21,7 +21,7 @@ atom_sd: # Atom standard deviations. Don't change indentation.
     C_m1: 1.030
     CA_m1: 0.932
     CB_m1: 1.025
-iterate_until_consistent:       2   # If True, iteratively enforce consistent links for High and Medium confidence assignments
+
 seq_link_threshold:      0.2     # Maximum allowed carbon shift difference (in ppm) between adjacent residues to count as a good sequential link.
 delta_correlation:       False   # Account for correlations in prediction errors
 delta_correlation_mean_file:     d_mean.csv       # File containing mean prediction errors
@@ -34,3 +34,7 @@ delta_correlation_cov_corrected_file:      dd_cov.csv        # File containing c
 #May want to add more parameters to control generation of alternative assignments
 alt_assignments: 0       # Number of alternative assignments to generate
 use_SS_class_info:  False   # Whether to use information on amino acid type, if available
+
+# Parameters controlling consistent assignment
+iterate_until_consistent:       2   # If True, iteratively enforce consistent links for High and Medium confidence assignments
+max_iterations: 1000

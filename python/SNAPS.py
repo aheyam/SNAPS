@@ -212,7 +212,7 @@ def runSNAPS(system_args):
         very_high_conf_assn = a.assign_df.loc[(a.assign_df.Confidence=="High") &
                                               (a.assign_df.Confidence_m1=="High") &
                                               (a.assign_df.Confidence_p1=="High"), ["Res_name", "SS_name"]]
-        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=200, verbose=True, init_inc=very_high_conf_assn)
+        node_df = a.find_consistent_assignments_4(threshold=a.pars["seq_link_threshold"], max_iterations=a.pars["max_iterations"], verbose=True, init_inc=very_high_conf_assn)
         best_node = (node_df.N_high + node_df.N_med - node_df.N_mismatch).idxmax()
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()

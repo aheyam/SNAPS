@@ -516,7 +516,8 @@ class SNAPS_assigner:
             obs = pd.concat([obs, dummies])
             self.logger.info("Added %d dummy observed residues" % len(dummies.index))
 
-
+        obs.index = obs.SS_name
+        obs.index.name = None
         self.obs = obs.copy()
         self.preds = preds.copy()
 
