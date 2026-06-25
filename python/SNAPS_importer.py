@@ -312,6 +312,8 @@ class SNAPS_importer:
                             else:
                                 obs.loc[ss,"CA"] = C_max
                                 obs.loc[ss,"CB"] = C_min
+                    elif spec=="hsqc":
+                        break       # H and N shifts should already have been imported, so can skip.
                     else:
                         print("Spectrum type %s not recognised" % spec)
                         break
@@ -336,6 +338,11 @@ class SNAPS_importer:
         # Import from file
         if filetype=="snaps":
             obs = pd.read_table(filename)
+        elif filetype=="snaps_obs":
+            obs = pd.read_table(filename)
+            obs.index.name = None
+            self.obs = obs
+            return self.obs
         elif filetype=="ccpn":
             obs = pd.read_table(filename)
             obs = obs.loc[:,["Residue", "Assign Name", "Shift"]]

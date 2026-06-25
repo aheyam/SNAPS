@@ -34,7 +34,7 @@ def get_arguments(system_args):
     # Information on input files and configuration options
     parser.add_argument("--shift_type",
                         choices=["snaps", "ccpn", "sparky", "mars",
-                                 "xeasy", "nmrpipe", "nef", "test"],
+                                 "xeasy", "nmrpipe", "nef", "test", "snaps_obs"],
                         default="snaps", 
                         help="The format of the observed shift file.")
     parser.add_argument("--pred_type",

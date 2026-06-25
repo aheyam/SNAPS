@@ -1712,7 +1712,7 @@ class SNAPS_assigner:
                 res_B = consistency_df.Res_name_p1[next_res]
 
             # prepare dataframes for including/excluding assignments
-            breakpoint()
+            # breakpoint()
             assn_df_A = current_node.Matching.loc[[res_A], :]
             assn_df_B = current_node.Matching.loc[[res_B], :]
             assn_df_AB = current_node.Matching.loc[[res_A,res_B], :]
