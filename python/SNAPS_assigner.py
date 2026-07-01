@@ -1697,10 +1697,10 @@ class SNAPS_assigner:
             consistency_df["Res_name_m1"] = consistency_df.Res_name.shift(1)
             consistency_df["Res_name_p1"] = consistency_df.Res_name.shift(-1)
             consistency_df["Priority"] = 0.0
-            consistency_df.loc[(consistency_df.Num_good_links_m1<0) &
+            consistency_df.loc[(consistency_df.Num_good_links_m1>0) &
                                (consistency_df.Max_mismatch_m1<threshold) &
                                (consistency_df.Max_mismatch_p1>threshold),"Priority"] = 1.0
-            consistency_df.loc[(consistency_df.Num_good_links_p1<0) &
+            consistency_df.loc[(consistency_df.Num_good_links_p1>0) &
                                (consistency_df.Max_mismatch_p1<threshold) &
                                (consistency_df.Max_mismatch_m1>threshold),"Priority"] = 1.0
             

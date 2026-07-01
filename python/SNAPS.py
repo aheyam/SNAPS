@@ -217,7 +217,7 @@ def runSNAPS(system_args):
         best_matching = node_df.loc[best_node, "Matching"]
         b = a.copy()
         b.make_assign_df(best_matching, set_assign_df=True)
-        b.add_consistency_info(threshold=0.2)
+        b.add_consistency_info(threshold=a.pars["seq_link_threshold"])
         b.assign_df.to_csv(output_dir/"consistent_assign_df.tsv", sep="\t", float_format="%.3f",
                            index=False)
         node_df.to_csv(output_dir/"node_df.tsv", sep="\t", float_format="%.3f", index=False)
