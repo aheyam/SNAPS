@@ -329,7 +329,8 @@ class SNAPS_importer:
             "nmrpipe", "mars" or "nef"
             The "ccpn" option is for importing a Resonance table exported from 
             Analysis v2.x. The "snaps" option is for importing an unassigned 
-            shift table previously exported from SNAPS
+            shift table previously exported from SNAPS, while "snaps_obs" is for
+            importing an observed shift table produced by 
         SS_num: If true, will extract the longest number from the SS_name and 
         treat it as the residue number. Without this, it is not possible to get
         the i-1 shifts for each spin system.

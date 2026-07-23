@@ -119,7 +119,7 @@ def get_arguments(system_args):
                                   "--seq_file", "data/testset/BMRB_seqs/"+testset_df.loc[args.test, "BMRB"].astype(str)+".txt",
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
-                                  "-c","config/test/config_consistent_2.yaml",
+                                  "-c","config/config_yaml_2.txt",  # "-c","config/test/config_consistent_2.yaml",
                                   "--strip_plot",
                                   "--hsqc_plot",
                                   "--test", args.test))
@@ -183,12 +183,18 @@ def runSNAPS(system_args):
 
         a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
     else:
+        preds_2 = a.import_pred_shifts_2(args.pred_file, args.pred_type, args.pred_seq_offset)
         a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
-
+        
     # Import sequence if available, and align predicted shifts
     if args.seq_file is not None:
-        breakpoint()
-        a.import_sequence(args.seq_file, args.seq_numbering)
+        # breakpoint()
+        if args.test is not None:
+            pass
+            first_residue = int(a.preds.Res_N.min())
+            a.import_sequence(args.seq_file, first_residue)
+        else:
+            a.import_sequence(args.seq_file, args.seq_numbering)
 
 
     #### Do the analysis
@@ -286,6 +292,7 @@ def runSNAPS(system_args):
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
 
+    breakpoint()
 
     return(plots)
 

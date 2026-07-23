@@ -22,7 +22,7 @@ from math import log10, sqrt
 from copy import deepcopy
 from pathlib import Path
 #from Bio.SeqUtils import seq1
-from Bio import SeqIO
+from Bio import SeqIO, Align
 from distutils.util import strtobool
 from collections import namedtuple
 from sortedcontainers import SortedListWithKey
@@ -200,10 +200,15 @@ class SNAPS_assigner:
                                 " length of the sequence, so has been extended")
 
         # Make a dataframe
-        seq_df = pd.DataFrame({"Res_N":res_N_list,"Res_type":seq_list})
+        seq_df = pd.DataFrame({"Seq_N":list(range(1,1+len(res_N_list))), "Res_N":res_N_list,"Res_type":seq_list})
+            # Seq_N numbers the residues starting from 1.
         seq_df["Res_name"] = seq_df["Res_N"].astype(str) + seq_df["Res_type"]
         seq_df["Res_name"] = seq_df["Res_name"].str.rjust(5)
-                                            # Pad Res_name to constant length
+                # Pad Res_name to constant length
+
+        # Add columns for i-1 and i+1 residue names
+        seq_df["Res_name_m1"] = seq_df["Res_name"].shift(1)
+        seq_df["Res_name_p1"] = seq_df["Res_name"].shift(-1)
 
         seq_df.index = seq_df["Res_name"]
         seq_df.index.name = None
@@ -384,6 +389,81 @@ class SNAPS_assigner:
         self.preds = preds
         return(self.preds)
 
+    def import_pred_shifts_2(self, filename, filetype, offset=0):
+        """ Import predicted chemical shifts from a ShiftX2 results file.
+        Note that this function does not transfer predictions for i-1 atoms -
+        that is done by map_preds_to_sequence()
+
+        Returns
+        A DataFrame containing the predicted shifts, or None if the import failed.
+
+        Parameters
+        filename: path to file containing predicted shifts
+        filetype: either "shiftx2" or "sparta+"
+        offset: an optional integer to add to the residue number.
+        """
+        
+        #### Import the raw data
+        if filetype == "shiftx2":
+            preds_long = pd.read_csv(filename)
+            if any(preds_long.columns == "CHAIN"):
+                if len(preds_long["CHAIN"].unique())>1:
+                    self.logger.warning(
+                            """Chain identifier dropped - if multiple chains are
+                            present in the predictions, they will be merged.""")
+                preds_long = preds_long.drop("CHAIN", axis=1)
+            preds_long = preds_long.reindex(columns=["NUM","RES","ATOMNAME",
+                                                     "SHIFT"])
+            preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+        elif filetype == "sparta+":
+            # Work out where the column names and data are
+            with open(filename, 'r') as f:
+                for num, line in enumerate(f, 1):
+                    if line.find("VARS")>-1:
+                        colnames_line = num
+                        colnames = line.split()[1:]
+                        break
+
+            preds_long = pd.read_table(filename, sep="\s+", names=colnames,
+                                       skiprows=colnames_line+1)
+            preds_long = preds_long.reindex(columns=["RESID","RESNAME",
+                                                     "ATOMNAME","SHIFT"])
+            preds_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
+
+            # Sparta+ uses HN for backbone amide proton - convert to H
+            preds_long.loc[preds_long["Atom_type"]=="HN", "Atom_type"] = "H"
+        else:
+            self.logger.error("Invalid predicted shift type: '%s'. Allowed "
+                              "options are 'shiftx2' or 'sparta+'" % (filetype))
+            return(None)
+
+        self.logger.info("Imported %d predicted chemical shifts from %s"
+                         % (len(preds_long.index), filename))
+        
+        #### Initial processing and conversion from long to wide
+        # Convert from long to wide format
+        preds = preds_long.pivot(index="Res_N", columns="Atom_type",
+                                 values="Shift")
+        preds.index.name = None
+
+        # Add residue type back into wide table
+        tmp = preds_long[["Res_N","Res_type"]]
+        tmp = tmp.drop_duplicates(subset="Res_N")
+        tmp.index = tmp["Res_N"]
+        tmp.index.name = None
+        preds = pd.concat([tmp, preds], axis=1)
+
+        # Apply sequence offset and create Res_name column
+        preds["Res_N"] = preds["Res_N"] + offset
+        preds.insert(1, "Res_name", preds["Res_N"].astype(str) + preds["Res_type"])
+        preds["Res_name"] = preds["Res_name"].str.rjust(5)
+
+        self.logger.info("Finished reading in %d predicted residues from %s"
+                         % (len(preds.index), filename))
+
+        self.preds = preds
+        return(self.preds)
+
     def simulate_pred_shifts(self, filename, sd, seed=None):
         """Generate a 'simulated' predicted shift DataFrame by importing some
         observed chemical shifts (in 'test' format), and adding Gaussian
@@ -450,6 +530,31 @@ class SNAPS_assigner:
 
         self.preds = preds
         return(self.preds)
+
+    def map_preds_to_sequence(self, seq_df, preds):
+        """Align the predictions to the sequence, and deal with any 
+        inconsistencies. Also transfer predictions for i-1 atoms
+        
+        Returns a dataframe with the residues defined in seq_df, with 
+        all aligned predictions from preds"""
+
+        # Do the alignment
+        sequence = seq_df.Res_type.sum()
+        pred_sequence = preds.Res_type.dropna().sum()
+        aligner = Align.PairwiseAligner()
+        aligner.substitution_matrix = Align.substitution_matrices.load("BLOSUM62")
+        alignment = aligner.align(sequence, pred_sequence)[0]
+
+        # alignment.aligned gives a list of lists containing the sequence ranges which align with each other.
+        # Not quite sure how best to turn this into a dataframe. range()?
+
+
+        # Create a dataframe mapping preds onto sequence
+
+        # Remove predictions where residue type is inconsistent
+
+        # Add columns for i-1 atoms
+        return()
 
     def prepare_obs_preds(self):
         """Perform preprocessing on the observed and predicted shifts to prepare
