@@ -548,8 +548,20 @@ class SNAPS_assigner:
         # alignment.aligned gives a list of lists containing the sequence ranges which align with each other.
         # Not quite sure how best to turn this into a dataframe. range()?
 
-
         # Create a dataframe mapping preds onto sequence
+        # alignment.aligned gives nested lists describing the aligned regions
+        # For example, it might be [[[0,5], [10,15]], [[0,5], [15,20]]]
+        # This means residues 0-4 of sequence 1 align with 0-4 of sequence 2, and residues 10-14 of sequence 1 align to 15-19 of sequence 2
+        seq_df_aligned_regions = alignment.aligned[0]
+        preds_aligned_regions = alignment.aligned[1]
+
+        seq_df_aligned_residues = []
+        for region in seq_df_aligned_regions: seq_df_aligned_residues += list(range(region[0], region[1]))
+        preds_aligned_residues = []
+        for region in preds_aligned_regions: preds_aligned_residues += list(range(region[0], region[1]))
+
+        preds.index = seq_df.index[seq_df_aligned_residues]
+        # Next step is to concatenate this onto the side of seq_df, I guess?
 
         # Remove predictions where residue type is inconsistent
 

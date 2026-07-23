@@ -183,7 +183,7 @@ def runSNAPS(system_args):
 
         a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
     else:
-        preds_2 = a.import_pred_shifts_2(args.pred_file, args.pred_type, args.pred_seq_offset)
+        preds_2 = a.import_pred_shifts_2(args.pred_file, args.pred_type)
         a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
         
     # Import sequence if available, and align predicted shifts
