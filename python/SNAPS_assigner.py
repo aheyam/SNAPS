@@ -59,6 +59,7 @@ class SNAPS_assigner:
     def __init__(self):
         self.obs = None
         self.preds = None
+        self.aligned_preds = None
         self.seq_df = None
         self.all_preds = None
         self.log_prob_matrix = None
@@ -614,23 +615,23 @@ class SNAPS_assigner:
         """
 
         obs = self.obs.copy()
-        preds = self.preds.copy()
+        preds = self.aligned_preds.copy()
 
         #### Delete any prolines in preds
-        self.all_preds = preds.copy()   # Keep a copy of all predictions
-        self.logger.info("Removing %d prolines from predictions"
-                         % sum(preds["Res_type"]=="P"))
-        preds = preds.drop(preds.index[preds["Res_type"]=="P"])
+        # self.all_preds = preds.copy()   # Keep a copy of all predictions
+        # self.logger.info("Removing %d prolines from predictions"
+        #                  % sum(preds["Res_type"]=="P"))
+        # preds = preds.drop(preds.index[preds["Res_type"]=="P"])
 
-        # Remove references to deleted residues from Res_name_m1/p1
-        preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.nan
-        preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.nan
+        # # Remove references to deleted residues from Res_name_m1/p1
+        # preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.nan
+        # preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.nan
 
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
 
         # Get all non-atom columns
-        all_atoms = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
+        all_atoms = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA", "N_m1", "N_p1"}
         obs_metadata = list(set(obs.columns).difference(all_atoms))
         preds_metadata = list(set(preds.columns).
                               difference(all_atoms))
@@ -647,6 +648,16 @@ class SNAPS_assigner:
         preds["Dummy_res"] = False
         obs["Dummy_SS"] = False
 
+        # Create dummy observations for each proline residue
+        # When probabilities are assigned, each proline observation will only match to its own proline
+        prolines = preds[preds.Res_type=="P"].Res_name
+        proline_obs = pd.DataFrame(index=prolines, columns=obs.columns)
+        proline_obs["SS_name"] = prolines
+        proline_obs["Dummy_SS"] = True
+        obs = pd.concat([obs, proline_obs])
+        # breakpoint()
+
+        # Add extra dummy residues or spin systems, so that there are equal numbers
         N = len(obs.index)
         M = len(preds.index)
 
@@ -670,7 +681,7 @@ class SNAPS_assigner:
         obs.index = obs.SS_name
         obs.index.name = None
         self.obs = obs.copy()
-        self.preds = preds.copy()
+        self.aligned_preds = preds.copy()
 
         return(self.obs, self.preds)
 
@@ -701,7 +712,7 @@ class SNAPS_assigner:
             atom_sd = self.pars["atom_sd"]
 
         obs = self.obs.copy()
-        preds = self.preds.copy()
+        preds = self.aligned_preds.copy()
         atoms = list(self.pars["atom_set"].intersection(obs.columns))
 
         if self.pars["pred_correction"]:
@@ -788,17 +799,22 @@ class SNAPS_assigner:
 
             if self.pars["delta_correlation"]:
                 # Store delta matrix for this atom type for later analysis
+                delta_atom = delta_atom.fillna(0.0)
                 delta_list = delta_list + [delta_atom.values]
             else:
                 # Make a note of NA positions in delta, and set them to zero
                 # (this avoids warnings when using norm.logpdf)
-                na_mask = np.isnan(delta_atom)
-                delta_atom[na_mask] = 0
+                # breakpoint()
+                # na_mask = np.isnan(delta_atom)
+                na_mask = delta_atom.isna()
+                delta_atom[na_mask] = 0.0
+                delta_atom = delta_atom.astype(float)
 
                 # Calculate the log probability density
                 prob_atom = pd.DataFrame(norm.logpdf(delta_atom,
                                                      scale=atom_sd[atom]),
                                          index=obs.index, columns=preds.index)
+                # norm.logpdf(delta_atom, scale=atom_sd[atom])
 
                 # Replace former NA values with a default value
                 prob_atom[na_mask] = log10(default_prob)
@@ -816,8 +832,10 @@ class SNAPS_assigner:
             delta_mat = np.moveaxis(delta_mat, 0, -1)
 
             # Make a note of NA positions in delta, and set them to zero
-            na_mask = np.isnan(delta_mat)
-            delta_mat[na_mask] = 0
+            breakpoint()
+            # na_mask = delta_mat.isna()
+            # delta_mat[na_mask] = 0.0
+            
 
             # Initialise multivariate model and calculate log_pdf
             mvn = multivariate_normal(d_mean, d_cov)
@@ -826,9 +844,9 @@ class SNAPS_assigner:
 
 
             # Apply a penalty for missing data
-            na_matrix = na_mask.sum(axis=-1)    # Count how many NA values for
-                                                # each Res/SS pair
-            log_prob_matrix = log_prob_matrix + log10(default_prob) * na_matrix
+            # na_matrix = na_mask.sum(axis=-1)    # Count how many NA values for
+            #                                     # each Res/SS pair
+            # log_prob_matrix = log_prob_matrix + log10(default_prob) * na_matrix
 
         if self.pars["use_SS_class_info"]:
             # For each type of residue type information that's available, make a
@@ -861,6 +879,14 @@ class SNAPS_assigner:
 
         log_prob_matrix.index.name = "SS_name"
         log_prob_matrix.columns.name = "Res_name"
+
+        # Pair up the proline dummy spin systems with the appropriate residue
+        prolines = preds[preds.Res_type=="P"].Res_name
+        log_prob_matrix.loc[:, prolines] = -10
+        log_prob_matrix.loc[prolines, :] = -10
+        for x in prolines:
+            log_prob_matrix.loc[x, x] = 0
+
 
         self.logger.info("Calculated log probability matrix (%dx%d)",
                          log_prob_matrix.shape[0], log_prob_matrix.shape[1])
@@ -1048,7 +1074,7 @@ class SNAPS_assigner:
         """
         obs = self.obs.copy()
         obs.index.name = "name" # Needed to avoid error when merging dataframes.
-        preds = self.preds.copy()
+        preds = self.aligned_preds.copy()
         log_prob_matrix = self.log_prob_matrix.copy()
         valid_atoms = list(self.pars["atom_set"])
         extra_cols = set(matching.columns).difference({"SS_name","Res_name"})
@@ -1139,7 +1165,7 @@ class SNAPS_assigner:
         matching.index = matching["Res_name"]
         matching.index.name = None
 
-        tmp = pd.concat([matching, self.preds[["Res_name_m1","Res_name_p1"]]], axis=1)
+        tmp = pd.concat([matching, self.aligned_preds[["Res_name_m1","Res_name_p1"]]], axis=1)
 
         # Add a SS_name_m1 and SS_name_p1 columns
         tmp = tmp.merge(matching[["SS_name"]], how="left", left_on="Res_name_m1",
@@ -1252,13 +1278,14 @@ class SNAPS_assigner:
         alt_assignments by rank
         """
 
-        log_prob_matrix = self.log_prob_matrix
+        log_prob_matrix = self.log_prob_matrix.copy()
+        preds = self.aligned_preds.copy()
         best_matching = self.assign_df.loc[:,["SS_name","Res_name"]]
         best_matching.index = best_matching["SS_name"]
         best_matching.index.name = None
         alt_matching = None
         dummy_rows = self.obs.loc[self.obs.Dummy_SS, "SS_name"]
-        dummy_cols = self.preds.loc[self.preds.Dummy_res, "Res_name"]
+        dummy_cols = preds.loc[preds.Dummy_res, "Res_name"]
 
         # Calculate sum probability for the best matching
         best_sum_prob = self.calc_overall_matching_prob(best_matching)
@@ -1426,6 +1453,7 @@ class SNAPS_assigner:
         """
 
         self.logger.info("Started assigning based on predictions and sequential links")
+        preds = self.aligned_preds.copy()
         assign_df0 = self.assign_from_preds()
         assign_df0 = self.add_consistency_info(assign_df0, threshold)
         N_HM_conf0 = assign_df0["Confidence"].isin(["High","Medium"]).sum()
@@ -1446,8 +1474,8 @@ class SNAPS_assigner:
 
             for res in HM_conf_res:
                 # Get the neighbouring residues
-                res_m1 = self.preds.loc[res,"Res_name_m1"]
-                res_p1 = self.preds.loc[res,"Res_name_p1"]
+                res_m1 = preds.loc[res,"Res_name_m1"]
+                res_p1 = preds.loc[res,"Res_name_p1"]
 
                 ss = tmp.SS_name[res]
 
@@ -1505,6 +1533,7 @@ class SNAPS_assigner:
         """
 
         self.logger.info("Started assigning based on predictions and sequential links")
+        preds = self.aligned_preds.copy()
         assign_df0 = self.assign_from_preds()
         assign_df0 = self.add_consistency_info(assign_df0, threshold)
         best_assign_df = assign_df0
@@ -1532,8 +1561,8 @@ class SNAPS_assigner:
             breakpoint()
             for res in HM_conf_res:
                 # Get the neighbouring residues
-                res_m1 = self.preds.loc[res,"Res_name_m1"]
-                res_p1 = self.preds.loc[res,"Res_name_p1"]
+                res_m1 = preds.loc[res,"Res_name_m1"]
+                res_p1 = preds.loc[res,"Res_name_p1"]
                 
                 ss = tmp.SS_name[res]
 
@@ -1902,8 +1931,8 @@ class SNAPS_assigner:
 
                 res_name = inc_assn.loc[:,"Res_name"]
                 ss_name = inc_assn.loc[:, "SS_name"]
-                res_name_m1 = self.preds.loc[res_name, "Res_name_m1"].reset_index(drop=True)
-                res_name_p1 = self.preds.loc[res_name, "Res_name_p1"].reset_index(drop=True)
+                res_name_m1 = self.aligned_preds.loc[res_name, "Res_name_m1"].reset_index(drop=True)
+                res_name_p1 = self.aligned_preds.loc[res_name, "Res_name_p1"].reset_index(drop=True)
                 # # Work out which spin systems should be excluded at the i-1 position
                 ss_name_m1 = ss_name[~res_name_m1.isna()]
                 res_name_m1 = res_name_m1[~res_name_m1.isna()]
@@ -1985,7 +2014,7 @@ class SNAPS_assigner:
                             "Total_mismatch": new_consistency_df.Max_mismatch_p1.sum(),
                             "Delta_mismatch": min(0, (new_consistency_df.Max_mismatch_p1>=threshold).sum()- current_node.N_mismatch),   
                                             # Change in mismatches relative to parent, but capped at +0. So fewer mismatches results in a -ve value, increased mismatches gives 0.
-                            "Chosen_mismatch": self.preds.loc[res_A, "Res_N"],
+                            "Chosen_mismatch": self.aligned_preds.loc[res_A, "Res_N"],
                             "Matching": matching,
                             "Inc": inc_assn, "Exc": exc_assn,
                             "N_inc": inc_assn.index.size, "N_exc": exc_mask.sum().sum() }])
@@ -2103,9 +2132,10 @@ class SNAPS_assigner:
 
             # NmrPipe requres a sequence, but we don't necessarily have a complete one
             # Piece togther what we can from all_preds, and put X at other positions
-            tmp = pd.DataFrame({"Res_N":np.arange(self.all_preds["Res_N"].min(),
-                                                  self.all_preds["Res_N"].max()+1)})
-            tmp = tmp.merge(self.all_preds[["Res_N","Res_type"]], how="left", on="Res_N")
+            # Have updated to use seq_df, which should be complete.
+            tmp = pd.DataFrame({"Res_N":np.arange(self.seq_df["Res_N"].min(),
+                                                  self.seq_df["Res_N"].max()+1)})
+            tmp = tmp.merge(self.seq_df[["Res_N","Res_type"]], how="left", on="Res_N")
             tmp["Res_type"] = tmp["Res_type"].fillna("X")
             seq = tmp["Res_type"].sum()     # Convert to a string
             self.logger.info("Sequence contains %d residues, of which %d have unknown type"
