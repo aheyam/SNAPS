@@ -102,6 +102,8 @@ def make_cmd(id, out_dir, config_file="config.txt", extra_args=[]):
             testset_df.loc[id, "obs_file"].as_posix(),
             testset_df.loc[id, "preds_file"].as_posix(),
             (path/"output"/out_dir/(testset_df.loc[id, "out_name"])).as_posix(),
+            "--seq_file", path/"data/testset/BMRB_seqs"/(testset_df.loc[id, "BMRB"].astype(str)+".txt"),
+            "--seq_numbering", str(testset_df.loc[id, "Seq_offset"]+1),
             "--shift_type", "test",
             "--pred_type", "shiftx2",
             "-c", (path/"config"/config_file).as_posix()]
@@ -125,6 +127,14 @@ if "basic" in args.test or "all" in args.test:
     if args.analyse:
         #assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         assigns_basic = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        
+        # Work out what the sequence offset should be
+        # assigns_basic["delta_N"] = assigns_basic.Pred_N - assigns_basic.Res_N
+        # tmp = assigns_basic.groupby("ID")["delta_N"].median().astype(int)
+        # tmp2 = pd.merge(testset_df, tmp, how="left", left_index=True, right_index=True)
+        # tmp2.loc[:,["ID", "PDB", "BMRB", "Resolution", "Length", "delta_N"]].to_csv(path/"output"/(out_dir+"_testset_df.txt"), sep="\t", header=False)
+        # breakpoint()
+
         summary_basic = summarise_results(assigns_basic)
         summary_basic.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
 

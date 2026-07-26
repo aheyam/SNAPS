@@ -15,7 +15,7 @@ def import_testset_metadata(path):
     path: top level SNAPS directory
     """
     testset_df = pd.read_table(path/"data/testset/testset.txt", header=None,
-                               names=["ID","PDB","BMRB","Resolution","Length"])
+                               names=["ID","PDB","BMRB","Resolution","Length", "Seq_offset"])
     testset_df["obs_file"] = [path/x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
     testset_df["preds_file"] = [path/x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
     testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
@@ -181,12 +181,12 @@ def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", assignm
         tmp["Rank"] = tmp["Rank"].astype(str)
 
         if "Max_mismatch_m1" in tmp.columns:
-            tmp = tmp.loc[:,["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
+            tmp = tmp.loc[:,["ID","Res_N","Res_type","Res_name","Pred_N","Pred_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res",
                        "Max_mismatch_m1","Max_mismatch_p1",
                        "Num_good_links_m1","Num_good_links_p1", "Confidence"]]
         else:
-            tmp = tmp.loc[:,["ID","Res_N","Res_type","Res_name","SS_name","Log_prob",
+            tmp = tmp.loc[:,["ID","Res_N","Res_type","Res_name","Pred_N","Pred_name","SS_name","Log_prob",
                        "Rank","Rel_prob","Dummy_SS","Dummy_res"]]
 
         # Convert Res_N column to integer
@@ -261,7 +261,7 @@ def summarise_results(assigns, output_file=None):
     confidence_list = ["High","Medium","Low","Unreliable","Undefined"]
 
     summary = pd.DataFrame({"ID":ID_list2, "Rank":Rank_list},
-                           columns=["ID", "Rank"]+status_list)
+                           columns=["ID", "Rank", "N", "N_SS", "Pc_correct"]+status_list)
 
     for i in summary.index:
         tmp = assigns.loc[(assigns["ID"] == summary.loc[i, "ID"]) &

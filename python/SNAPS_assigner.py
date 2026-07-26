@@ -533,7 +533,7 @@ class SNAPS_assigner:
 
     def map_preds_to_sequence(self, seq_df, preds):
         """Align the predictions to the sequence, and deal with any 
-        inconsistencies. Also transfer predictions for i-1 atoms
+        inconsistencies. Also transfer predictions for i-1 atoms.
         
         Returns a dataframe with the residues defined in seq_df, with 
         all aligned predictions from preds"""
@@ -544,9 +544,8 @@ class SNAPS_assigner:
         aligner = Align.PairwiseAligner()
         aligner.substitution_matrix = Align.substitution_matrices.load("BLOSUM62")
         alignment = aligner.align(sequence, pred_sequence)[0]
-
-        # alignment.aligned gives a list of lists containing the sequence ranges which align with each other.
-        # Not quite sure how best to turn this into a dataframe. range()?
+        self.alignment = alignment
+        # breakpoint()
 
         # Create a dataframe mapping preds onto sequence
         # alignment.aligned gives nested lists describing the aligned regions
@@ -560,13 +559,48 @@ class SNAPS_assigner:
         preds_aligned_residues = []
         for region in preds_aligned_regions: preds_aligned_residues += list(range(region[0], region[1]))
 
-        preds.index = seq_df.index[seq_df_aligned_residues]
-        # Next step is to concatenate this onto the side of seq_df, I guess?
+        preds = preds.iloc[preds_aligned_residues, :]       # Discard predictions that are not in the alignment
+        preds.index = seq_df.index[seq_df_aligned_residues] # Index the predictions with their position in sequence
+        preds = preds.rename(columns={"Res_N":"Pred_N", "Res_name":"Pred_name", "Res_type":"Pred_type"})
+        aligned_preds = pd.concat((seq_df, preds), axis=1)
+        
+        # If glycine HA is missing, replace it with average of HA2 and HA3
+        mask = aligned_preds.HA.isna()
+        aligned_preds.loc[mask, "HA"] = 0.5 * (aligned_preds.loc[mask, "HA2"] + aligned_preds.loc[mask, "HA3"])
+
+        # Remove atoms that are not used?
+        cols_to_keep = ["Seq_N", "Res_N", "Res_type", "Res_name", "Res_name_m1", 
+                        "Res_name_p1", "Pred_N", "Pred_type", "Pred_name"] 
+        atom_list = list(self.pars["atom_set"].intersection(aligned_preds.columns))
+        aligned_preds = aligned_preds.loc[:, cols_to_keep + atom_list]
 
         # Remove predictions where residue type is inconsistent
+        inconsistent_res_type = (aligned_preds.Res_type != aligned_preds.Pred_type)
+        aligned_preds.loc[inconsistent_res_type, atom_list] = np.nan
+       
+        # Add columns for i-1 and i+1 atoms
+        aligned_preds.index = aligned_preds.Res_name
+        aligned_preds.index.name = None
+        preds_m1 = aligned_preds[list({"C","CA","CB", "N","Res_type","Res_name", "Res_name_p1"}.
+                              intersection(aligned_preds.columns))].copy()
+        preds_m1.index = preds_m1.Res_name_p1   # Note _p1, because we need to transfer the chemical shift to the i+1 residue!
+        aligned_preds = pd.merge(aligned_preds, preds_m1[["C","CA","CB", "N"]], how="left",
+                         left_index=True, right_index=True, suffixes=["", "_m1"])
+        
+        preds_p1 = aligned_preds[list({"N","Res_type","Res_name", "Res_name_m1"}.
+                              intersection(aligned_preds.columns))].copy()
+        preds_p1.index = preds_p1.Res_name_m1   # Note _m1, because we need to transfer the chemical shift to the i-1 residue!
+        aligned_preds = pd.merge(aligned_preds, preds_p1[["N"]], how="left",
+                         left_index=True, right_index=True, suffixes=["", "_p1"])
+        
+        # Output the alignment in human-readable form.
 
-        # Add columns for i-1 atoms
-        return()
+        # Output info to log
+        self.logger.info("Aligned %d predicted residues to sequence" % ((~aligned_preds.Pred_name.isna()).sum()))
+        self.logger.info("\n"+str(alignment))
+        
+        self.aligned_preds = aligned_preds
+        return(aligned_preds)
 
     def prepare_obs_preds(self):
         """Perform preprocessing on the observed and predicted shifts to prepare
@@ -1025,10 +1059,10 @@ class SNAPS_assigner:
 
         assign_df = pd.merge(matching,
                              preds.loc[:,["Res_N","Res_type", "Res_name",
-                                    "Dummy_res"]],
+                                    "Pred_N", "Pred_name", "Dummy_res"]],
                              on="Res_name", how="left")
         assign_df = assign_df[["Res_name","Res_N","Res_type","SS_name",
-                               "Dummy_res"]+list(extra_cols)]
+                               "Pred_N", "Pred_name", "Dummy_res"]+list(extra_cols)]
         assign_df = pd.merge(assign_df,
                              obs.loc[:, obs.columns.isin(
                                      ["SS_name","Dummy_SS"]+valid_atoms)],
@@ -2290,6 +2324,11 @@ class SNAPS_assigner:
         """
 
         assign_df = self.assign_df.copy()
+
+        if not pd.Series(["H","N"]).isin(assign_df.columns).all():
+            # You can't draw an HSQC plot
+            self.logger.warning("Observed data does not contain both H and N - HSQC cannot be plotted.")
+            return(None)
 
         plt = figure(title="HSQC",
                     x_axis_label="1H (ppm)",

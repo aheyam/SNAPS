@@ -107,8 +107,9 @@ def get_arguments(system_args):
         import pandas as pd
 
         testset_df = pd.read_table("data/testset/testset.txt", header=None,
-                                names=["ID","PDB","BMRB","Resolution","Length"])
+                                names=["ID","PDB","BMRB","Resolution","Length","Seq_offset"])
         testset_df["obs_file"] = [x for x in "data/testset/simplified_BMRB/"+testset_df["BMRB"].astype(str)+".txt"]
+        # breakpoint()
         testset_df["preds_file"] = [x for x in "data/testset/shiftx2_results/"+testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
         testset_df["out_name"] = testset_df["ID"]+"_"+testset_df["BMRB"].astype(str)
         testset_df.index = testset_df["ID"]
@@ -117,6 +118,7 @@ def get_arguments(system_args):
                                   testset_df.loc[args.test, "preds_file"],
                                   "output/test",
                                   "--seq_file", "data/testset/BMRB_seqs/"+testset_df.loc[args.test, "BMRB"].astype(str)+".txt",
+                                  "--seq_numbering", str(testset_df.loc[args.test, "Seq_offset"]+1),
                                   "--shift_type","test",
                                   "--pred_type","shiftx2",
                                   "-c","config/config_yaml_2.txt",  # "-c","config/test/config_consistent_2.yaml",
@@ -159,6 +161,23 @@ def runSNAPS(system_args):
     # Import observed and predicted shifts
     importer = SNAPS_importer()
 
+    # Import sequence if available, and align predicted shifts
+    a.import_sequence(args.seq_file, args.seq_numbering)
+
+    if args.simulate_pred_shifts:
+        # Calculate the errors for each atom as the 95% percentile interval multipled by 
+        # the sim_pred_multiplier argument
+        atom_errors = a.pars["atom_95_percentile"]
+        for k in atom_errors.keys():
+             atom_errors[k] = atom_errors[k]*args.sim_pred_multiplier
+
+        a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
+    else:
+        preds_2 = a.import_pred_shifts_2(args.pred_file, args.pred_type)
+        a.map_preds_to_sequence(a.seq_df, preds_2)
+        a.preds = a.aligned_preds
+
+    # Import observed shifts
     if args.shift_type=="test":
         if args.test_aa_classes is None:
             importer.import_testset_shifts(args.shift_file)
@@ -173,29 +192,6 @@ def runSNAPS(system_args):
     a.obs = importer.obs
     logger.info("Finished reading in %d spin systems from %s",
                  len(a.obs["SS_name"]), args.shift_file)
-
-    if args.simulate_pred_shifts:
-        # Calculate the errors for each atom as the 95% percentile interval multipled by 
-        # the sim_pred_multiplier argument
-        atom_errors = a.pars["atom_95_percentile"]
-        for k in atom_errors.keys():
-             atom_errors[k] = atom_errors[k]*args.sim_pred_multiplier
-
-        a.simulate_pred_shifts(args.shift_file, atom_errors, args.sim_pred_seed)
-    else:
-        preds_2 = a.import_pred_shifts_2(args.pred_file, args.pred_type)
-        a.import_pred_shifts(args.pred_file, args.pred_type, args.pred_seq_offset)
-        
-    # Import sequence if available, and align predicted shifts
-    if args.seq_file is not None:
-        # breakpoint()
-        if args.test is not None:
-            pass
-            first_residue = int(a.preds.Res_N.min())
-            a.import_sequence(args.seq_file, first_residue)
-        else:
-            a.import_sequence(args.seq_file, args.seq_numbering)
-
 
     #### Do the analysis
     a.prepare_obs_preds()
@@ -292,7 +288,7 @@ def runSNAPS(system_args):
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
 
-    breakpoint()
+    # breakpoint()
 
     return(plots)
 
