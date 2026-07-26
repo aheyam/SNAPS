@@ -741,11 +741,16 @@ class SNAPS_assigner:
             prob_matrix = prob_matrix * prob_atom
 
         # Penalise matches to glycine residues if SS has a CB
-        glycines = preds[preds.Res_type=="G"].Res_name
-        obs_CB = obs[~obs.CB.isna()].SS_name
-
-        for g in glycines:
-            prob_matrix.loc[obs_CB, g] = prob_matrix.loc[obs_CB, g] * glycine_CB_penalty
+        if "CB" in obs.columns:
+            glycines = preds[preds.Res_type=="G"].Res_name
+            obs_CB = obs[~obs.CB.isna()].SS_name
+            for g in glycines:
+                prob_matrix.loc[obs_CB, g] = prob_matrix.loc[obs_CB, g] * glycine_CB_penalty
+            
+            glycines_m1 = preds[preds.Res_type=="G"].Res_name
+            obs_CB_m1 = obs[~obs.CB_m1.isna()].SS_name
+            for g in glycines_m1:
+                prob_matrix.loc[obs_CB_m1, g] = prob_matrix.loc[obs_CB_m1, g] * glycine_CB_penalty
 
         # Pair up the proline dummy spin systems with the appropriate residue
         prolines = preds[preds.Res_type=="P"].Res_name
