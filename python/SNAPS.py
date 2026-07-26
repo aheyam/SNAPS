@@ -195,7 +195,9 @@ def runSNAPS(system_args):
 
     #### Do the analysis
     a.prepare_obs_preds()
+    a.calc_prob_matrix()
     a.calc_log_prob_matrix()
+    # a.calc_log_prob_matrix_old()
     a.calc_mismatch_matrix()
 
     if a.pars["iterate_until_consistent"] == 1:

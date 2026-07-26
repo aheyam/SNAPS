@@ -62,6 +62,7 @@ class SNAPS_assigner:
         self.aligned_preds = None
         self.seq_df = None
         self.all_preds = None
+        self.prob_matrix = None
         self.log_prob_matrix = None
         self.mismatch_matrix = None
         self.consistent_links_matrix = None
@@ -607,8 +608,8 @@ class SNAPS_assigner:
         """Perform preprocessing on the observed and predicted shifts to prepare
         them for calculation of the log probability matrix.
 
-        1) Remove proline residues from predictions
-        2) Discard atom types that are not used or aren't present in both
+        1) Discard atom types that are not used or aren't present in both
+        2) Create dummy spin systems for prolines
         3) Add dummy rows to obs or preds to bring them to the same length
 
         Returns the modified obs and preds DataFrames.
@@ -616,16 +617,6 @@ class SNAPS_assigner:
 
         obs = self.obs.copy()
         preds = self.aligned_preds.copy()
-
-        #### Delete any prolines in preds
-        # self.all_preds = preds.copy()   # Keep a copy of all predictions
-        # self.logger.info("Removing %d prolines from predictions"
-        #                  % sum(preds["Res_type"]=="P"))
-        # preds = preds.drop(preds.index[preds["Res_type"]=="P"])
-
-        # # Remove references to deleted residues from Res_name_m1/p1
-        # preds.loc[~preds["Res_name_m1"].isin(preds["Res_name"]), "Res_name_m1"] = np.nan
-        # preds.loc[~preds["Res_name_p1"].isin(preds["Res_name"]), "Res_name_p1"] = np.nan
 
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
@@ -686,7 +677,117 @@ class SNAPS_assigner:
         return(self.obs, self.preds)
 
 
-    def calc_log_prob_matrix(self, atom_sd=None, sf=1, default_prob=0.01):
+    def calc_prob_matrix(self, atom_sd=None, glycine_CB_penalty=0.01,
+                         normalise_by=None):
+        """Calculate a matrix of probabilities based on match between observed
+        and predicted chemical shifts.
+
+        By probability, we mean the value of the probability density function,
+        assuming the prediction errors follow a Gaussian distribution.
+        If self.pars["delta_correlation"]==True, correlations in errors between
+        different atom types will be accounted for.
+
+        Returns
+        A DataFrame containing the probabilities
+
+        Parameters
+        atom_sd: A dictionary containing the expected standard error in the
+            predictions for each atom type
+        glycine_CB_penalty: How much to penalise the probability that an 
+        observation corresponds to a glycine if it has a CB chemical shift
+        normalise_by: If "SS" or "Res", the sum of probabilities is normalised 
+        to 1 along that axis. If None, no normalisation is done.
+        """
+
+        obs = self.obs.copy()
+        preds = self.aligned_preds.copy()
+        atoms = list(self.pars["atom_set"].intersection(obs.columns))
+        prob_matrix = pd.DataFrame(1.0, index=obs.index, columns=preds.index)
+        prob_matrix.index.name = "SS_name"
+        prob_matrix.columns.name = "Res_name"
+
+        # Use default atom_sd values if not defined
+        if atom_sd==None:
+            atom_sd = self.pars["atom_sd"]
+
+        if self.pars["delta_correlation"]:
+            # Import parameters describing the delta correlations
+            pass
+
+        # Calculate the differences between every prediction and every observation, 
+        # for each atom type
+        for atom in atoms:
+            # The most efficient way I've found to do the calculation is to
+            # take the obs and preds shift columns for an atom, repeat each
+            # into a matrix, then subtract these matrixes from each other.
+            # That way, all calculations take advantage of vectorisation.
+            # Much faster than using loops.
+            obs_atom = pd.DataFrame(obs[atom].repeat(len(obs.index)).values.
+                                reshape([len(obs.index),-1]),
+                                index=obs.index, columns=preds.index)
+            preds_atom = pd.DataFrame(preds[atom].repeat(len(preds.index)).values.
+                                reshape([len(preds.index),-1]).transpose(),
+                                index=obs.index, columns=preds.index)
+            
+            delta_atom = preds_atom - obs_atom
+            # breakpoint()
+            # Make sure delta_atom is entirely numeric, with any NAs replaced with 0
+            delta_atom = delta_atom.fillna(0.0).astype(float)
+
+            # Calculate probability density and apply to probability matrix
+            prob_atom = pd.DataFrame(norm.pdf(delta_atom, scale=atom_sd[atom]), 
+                                     index=obs.index, columns=preds.index)
+
+            prob_matrix = prob_matrix * prob_atom
+
+        # Penalise matches to glycine residues if SS has a CB
+        glycines = preds[preds.Res_type=="G"].Res_name
+        obs_CB = obs[~obs.CB.isna()].SS_name
+
+        for g in glycines:
+            prob_matrix.loc[obs_CB, g] = prob_matrix.loc[obs_CB, g] * glycine_CB_penalty
+
+        # Pair up the proline dummy spin systems with the appropriate residue
+        prolines = preds[preds.Res_type=="P"].Res_name
+        prob_matrix.loc[:, prolines] = 1e-10
+        prob_matrix.loc[prolines, :] = 1e-10
+        for x in prolines:
+            prob_matrix.loc[x, x] = 1.0
+
+        # Replace any zero probabilities which a very small number
+        # This can happen due to rounding error
+        prob_matrix[prob_matrix==0] = 1e-200
+
+        # Do the normalisation
+        if normalise_by=="Res":
+            prob_matrix = prob_matrix / prob_matrix.sum(axis=0)
+        elif normalise_by=="SS":
+            prob_matrix = prob_matrix / prob_matrix.sum(axis=1)
+
+        self.logger.info("Calculated probability matrix (%dx%d)",
+                         prob_matrix.shape[0], prob_matrix.shape[1])
+        
+        self.prob_matrix = prob_matrix
+        return(prob_matrix)
+
+    def calc_log_prob_matrix(self, prob_matrix=None):
+        """Calculate a log probability matrix from a probability matrix
+        
+        By default uses the prob_matrix stored in the SNAPS_assigner object, 
+        but can also be passed a different prob_matrix.
+
+        Returns
+        A DataFrame containing the log probabilities
+        """
+        if prob_matrix==None:
+            prob_matrix = self.prob_matrix
+        
+        log_prob_matrix = np.log10(prob_matrix)
+
+        self.log_prob_matrix = log_prob_matrix
+        return(log_prob_matrix)
+
+    def calc_log_prob_matrix_old(self, atom_sd=None, sf=1, default_prob=0.01):
         """Calculate a matrix of -log10(match probabilities).
 
         By probability, we mean the value of the probability density function,
