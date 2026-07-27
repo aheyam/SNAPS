@@ -274,6 +274,12 @@ args = parser.parse_args()
 # path = Path("C:/Users/alexh/GitHub/SNAPS/")
 path = Path(args.SNAPS_path)
 
+# Create output directory, if it doesn't already exist
+output_dir = path/"output"/"error_dist"
+output_dir.mkdir(parents=True, exist_ok=True)
+plot_dir = path/"plots"/"error_dist"
+plot_dir.mkdir(parents=True, exist_ok=True)
+
 # Import information on the ShiftX2 testset
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 
                            names=["ID","PDB","BMRB","Resolution","Length", "Seq_offset"])
@@ -326,10 +332,27 @@ tmp["pc_complete"] = (tmp.Shift / tmp.Res_N)
 tmp2 = tmp.pivot(index="ID", columns="Atom_type", values="pc_complete").fillna(0.0)
 tmp2.to_csv(path/"output"/"error_dist"/"Observed shift completeness.tsv", sep="\t", float_format="%.3f")
 
-plt = ggplot(tmp)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
-plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
-plt = plt + facet_grid("Atom_type ~ .")
-plt.save(path/"plots/error_dist"/"observed shift completeness.pdf", height=150, width=200, units="mm")
+if args.plot:
+    plt = ggplot(tmp)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+    plt = plt + facet_grid("Atom_type ~ .")
+    plt.save(path/"plots/error_dist"/"Observed shift completeness.pdf", height=150, width=200, units="mm")
+
+# Output mean and standard deviation of all atoms, by residue
+atoms = ["H","N","C","CA","CB","HA"]
+tmp = obs_all.groupby(["Atom_type", "Res_type"]).Shift.mean().reset_index()
+atom_res_mean = tmp.pivot(index="Res_type", columns="Atom_type", values="Shift")
+atom_res_mean.loc[:,atoms].to_csv(path/"output"/"error_dist"/"Observed shift average - residue .tsv", sep="\t", float_format="%.3f")
+tmp = obs_all.groupby(["Atom_type", "Res_type"]).Shift.std().reset_index()
+atom_res_std = tmp.pivot(index="Res_type", columns="Atom_type", values="Shift")
+atom_res_std.loc[:,atoms].to_csv(path/"output"/"error_dist"/"Observed shift stdev - residue .tsv", sep="\t", float_format="%.3f")
+
+if args.plot:
+    for atom in obs_all.Atom_type.unique():
+        tmp = obs_all[obs_all.Atom_type==atom]
+        plt = ggplot(tmp) + geom_density(aes(x="Shift")) + facet_wrap("Res_type")
+        plt.save(path/"plots/error_dist"/(atom+" observed shift - residue.pdf"), height=200, width=200, units="mm")
+
 
 # Import all predicted shifts
 preds_shiftx2 = None
@@ -452,6 +475,7 @@ for out_dir in comparison_dict:
     preds = comparison_dict[out_dir][1]
 
     (path/"plots/error_dist"/out_dir).mkdir(parents=True, exist_ok=True)   # Make output directory
+    (path/"plots/error_dist"/out_dir/"excluded").mkdir(parents=True, exist_ok=True)
 
     # Merge the obs and preds dataframes, and clean up
     df = pd.merge(obs, preds, on=["ID","Res_N","Res_type", "Res_type_m1", "Atom_type"], 
@@ -476,10 +500,11 @@ for out_dir in comparison_dict:
     tmp3 = tmp2.pivot(index="ID", columns="Atom_type", values="pc_complete").fillna(0.0)
     tmp3.to_csv(path/"output"/"error_dist"/(out_dir+" Predicted shift completeness.tsv"), sep="\t", float_format="%.3f")
 
-    plt = ggplot(tmp2)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
-    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
-    plt = plt + facet_grid("Atom_type ~ .")
-    plt.save(path/"plots/error_dist"/(out_dir + " Predicted shift completeness.pdf"), height=150, width=200, units="mm")
+    if args.plot:
+        plt = ggplot(tmp2)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
+        plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+        plt = plt + facet_grid("Atom_type ~ .")
+        plt.save(path/"plots/error_dist"/(out_dir + " Predicted shift completeness.pdf"), height=150, width=200, units="mm")
 
 
     # Plot all predicted vs observed shifts
