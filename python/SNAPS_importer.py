@@ -494,8 +494,10 @@ class SNAPS_importer:
         """
         #### Import the observed chemical shifts
         obs_long = pd.read_table(filename)
-        obs_long = obs_long[["Residue_PDB_seq_code","Residue_label",
+        obs_long = obs_long[["Residue_seq_code","Residue_label",
                              "Atom_name","Chem_shift_value"]]
+            # Note that input file has another column "Residue_PDB_seq_code".
+            # If you use that, you get weird slips in sequence numbering.
         obs_long.columns = ["Res_N","Res_type","Atom_type","Shift"]
         # Convert residue type to single-letter code
         if short_aa_names: 
