@@ -126,7 +126,7 @@ if "basic" in args.test or "all" in args.test:
 
     if args.analyse:
         #assigns_basic, summary_basic = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
-        assigns_basic = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
+        assigns_basic = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all, output_file="all_assignments.tsv")
         
         # Work out what the sequence offset should be
         # assigns_basic["delta_N"] = assigns_basic.Pred_N - assigns_basic.Res_N

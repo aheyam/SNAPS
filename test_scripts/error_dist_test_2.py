@@ -276,17 +276,17 @@ path = Path(args.SNAPS_path)
 
 # Import information on the ShiftX2 testset
 testset_df = pd.read_table(path/"data/testset/testset.txt", header=None, 
-                           names=["ID","PDB","BMRB","Resolution","Length"])
+                           names=["ID","PDB","BMRB","Resolution","Length", "Seq_offset"])
 testset_df["Included"] = True
 # Also import testset proteins that will eventually be excluded from the analysis
 testset_df_excluded = pd.read_table(path/"data/testset/testset_excluded.txt", header=None, 
-                           names=["ID","PDB","BMRB","Resolution","Length"])
+                           names=["ID","PDB","BMRB","Resolution","Length", "Seq_offset"])
 testset_df_excluded["Included"] = False
 testset_df = pd.concat([testset_df, testset_df_excluded], ignore_index=True)
 excluded_IDs = testset_df_excluded.ID
 
 testset_df["obs_file"] = [path/"data/testset/simplified_BMRB"/file 
-                      for file in testset_df["BMRB"].astype(str)+".txt"]
+                      for file in testset_df["BMRB"].astype(int).astype(str)+".txt"]
 testset_df["shiftx2_file"] = [path/"data/testset/shiftx2_results"/file 
                       for file in testset_df["ID"]+"_"+testset_df["PDB"]+".cs"]
 testset_df["noshifty_file"] = [path/"data/testset/noshifty_results"/file 
@@ -320,6 +320,17 @@ for i in testset_df.ID:
     else:
         obs_all = pd.concat([obs_all, obs], ignore_index=True)
     
+# Output statistics on the imported observations, per testset protein
+tmp = obs_all.groupby(["ID", "Atom_type"]).count().reset_index()
+tmp["pc_complete"] = (tmp.Shift / tmp.Res_N)
+tmp2 = tmp.pivot(index="ID", columns="Atom_type", values="pc_complete").fillna(0.0)
+tmp2.to_csv(path/"output"/"error_dist"/"Observed shift completeness.tsv", sep="\t", float_format="%.3f")
+
+plt = ggplot(tmp)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
+plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+plt = plt + facet_grid("Atom_type ~ .")
+plt.save(path/"plots/error_dist"/"observed shift completeness.pdf", height=150, width=200, units="mm")
+
 # Import all predicted shifts
 preds_shiftx2 = None
 for i in testset_df["ID"]:
@@ -454,7 +465,23 @@ for out_dir in comparison_dict:
     df = df[~df.ID.isin(excluded_IDs)]
 
     print(df.groupby("Atom_type").count())      # Print a summary of the imported data
-    
+
+    # Output statistics about the predicted shifts
+    tmp = obs_all.groupby(["ID", "Atom_type"]).count()
+
+    tmp2 = df.groupby(["ID", "Atom_type"]).count()
+    tmp2["pc_complete"] = tmp2.Shift_pred / tmp.Res_N
+    tmp2 = tmp2.reset_index()
+
+    tmp3 = tmp2.pivot(index="ID", columns="Atom_type", values="pc_complete").fillna(0.0)
+    tmp3.to_csv(path/"output"/"error_dist"/(out_dir+" Predicted shift completeness.tsv"), sep="\t", float_format="%.3f")
+
+    plt = ggplot(tmp2)+ geom_bar(aes(x="ID", y="pc_complete", fill="Atom_type"), stat="identity")
+    plt = plt + theme(axis_text_x=element_text(rotation=90, hjust=0.5))
+    plt = plt + facet_grid("Atom_type ~ .")
+    plt.save(path/"plots/error_dist"/(out_dir + " Predicted shift completeness.pdf"), height=150, width=200, units="mm")
+
+
     # Plot all predicted vs observed shifts
     if args.plot:
         plt = ggplot(df, aes(x="Shift_obs", y="Shift_pred")) + geom_point()

@@ -235,7 +235,7 @@ def collect_assignment_results(data_dir, testset_df, ID_list, prefix="", assignm
     assigns.loc[:,"Status"] = assigns["Status"].astype("category")
 
     if output_file is not None:
-        assigns.to_csv(output_file, sep="\t", float_format="%.3f")
+        assigns.to_csv(data_dir/output_file, sep="\t", float_format="%.3f")
 
     return(assigns)
 

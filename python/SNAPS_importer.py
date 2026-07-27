@@ -522,6 +522,8 @@ class SNAPS_importer:
         tmp = tmp.drop_duplicates(subset="SS_name")
         tmp.index = tmp["Res_N"]
         obs = pd.concat([tmp, obs], axis=1)
+
+        
         
         # Make columns for the i-1 observed shifts of C, CA and CB
         obs_m1 = obs[list({"C","CA","CB","Res_type"}.intersection(obs.columns))]
