@@ -712,7 +712,20 @@ class SNAPS_assigner:
 
         if self.pars["delta_correlation"]:
             # Import parameters describing the delta correlations
-            pass
+            # Note: this also sorts the atom types in d_mean and c_cov into the
+            # same order as the 'atoms' list defined above.
+
+            d_mean = pd.read_csv(self.pars["delta_correlation_mean_file"],
+                                    header=None, index_col=0).loc[atoms,1]
+            d_cov = (pd.read_csv(self.pars["delta_correlation_cov_file"],
+                                    index_col=0).loc[atoms,atoms])
+            self.logger.info("Imported delta_correlation info from %s and %s"
+                            % (self.pars["delta_correlation_mean_file"],
+                            self.pars["delta_correlation_cov_file"]))
+            
+            # For the delta_correlation method, we need to store the prediction
+            # errors for each atom type for analysis at the end.
+            delta_list = []
 
         # Calculate the differences between every prediction and every observation, 
         # for each atom type
@@ -730,15 +743,33 @@ class SNAPS_assigner:
                                 index=obs.index, columns=preds.index)
             
             delta_atom = preds_atom - obs_atom
-            # breakpoint()
+
             # Make sure delta_atom is entirely numeric, with any NAs replaced with 0
             delta_atom = delta_atom.fillna(0.0).astype(float)
 
-            # Calculate probability density and apply to probability matrix
-            prob_atom = pd.DataFrame(norm.pdf(delta_atom, scale=atom_sd[atom]), 
-                                     index=obs.index, columns=preds.index)
+            if self.pars["delta_correlation"]:
+                # Store delta matrix for this atom type for later analysis
+                delta_list = delta_list + [delta_atom.values]
+            else:
+                # Calculate probability density and apply to probability matrix
+                prob_atom = pd.DataFrame(norm.pdf(delta_atom, scale=atom_sd[atom]), 
+                                        index=obs.index, columns=preds.index)
 
-            prob_matrix = prob_matrix * prob_atom
+                prob_matrix = prob_matrix * prob_atom
+
+        if self.pars["delta_correlation"]:
+            self.logger.info("Accounting for correlated prediction errors")
+
+            # Combine the delta matrixes from each atom type into a single 3D matrix
+            delta_mat = np.array(delta_list)
+            # Move the axis containing the atom category to the end
+            # (necessary for multivariate_normal function)
+            delta_mat = np.moveaxis(delta_mat, 0, -1)          
+
+            # Initialise multivariate model and calculate log_pdf
+            mvn = multivariate_normal(d_mean, d_cov)
+            prob_matrix = pd.DataFrame(mvn.pdf(delta_mat),
+                                           index=obs.index, columns=preds.index)
 
         # Penalise matches to glycine residues if SS has a CB
         if "CB" in obs.columns:
@@ -760,10 +791,10 @@ class SNAPS_assigner:
             prob_matrix.loc[x, x] = 1.0
 
         # Replace any zero probabilities which a very small number
-        # This can happen due to rounding error
+        # (Zero probabilities can happen due to rounding error, I think)
         prob_matrix[prob_matrix==0] = 1e-200
 
-        # Do the normalisation
+        # Do the normalisation, if needed
         if normalise_by=="Res":
             prob_matrix = prob_matrix / prob_matrix.sum(axis=0)
         elif normalise_by=="SS":

@@ -320,6 +320,7 @@ if "delta_correlation" in args.test or "all" in args.test:
 
         assigns_dc = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
         summary_dc = summarise_results(assigns_dc)
+        summary_dc.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
 
         save_summary_plot(assigns_dc, summary_dc, out_dir)
 
