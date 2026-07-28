@@ -177,6 +177,8 @@ def runSNAPS(system_args):
         a.map_preds_to_sequence(a.seq_df, preds_2)
         a.preds = a.aligned_preds
 
+    
+
     # Import observed shifts
     if args.shift_type=="test":
         if args.test_aa_classes is None:
@@ -195,7 +197,13 @@ def runSNAPS(system_args):
 
     #### Do the analysis
     a.prepare_obs_preds()
-    a.calc_prob_matrix()
+    a.prob_matrix = a.calc_prob_matrix()
+
+    if a.pars["use_generic_predictions"]:
+        a.create_generic_predictions()
+        a.generic_prob_matrix = a.calc_generic_prob_matrix()
+        a.prob_matrix *= a.generic_prob_matrix
+        
     a.calc_log_prob_matrix()
     # a.calc_log_prob_matrix_old()
     a.calc_mismatch_matrix()

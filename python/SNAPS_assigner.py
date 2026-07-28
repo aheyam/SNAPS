@@ -62,6 +62,7 @@ class SNAPS_assigner:
         self.aligned_preds = None
         self.seq_df = None
         self.all_preds = None
+        self.alignment = None
         self.prob_matrix = None
         self.log_prob_matrix = None
         self.mismatch_matrix = None
@@ -547,19 +548,21 @@ class SNAPS_assigner:
         aligner.substitution_matrix = Align.substitution_matrices.load("BLOSUM62")
         alignment = aligner.align(sequence, pred_sequence)[0]
         self.alignment = alignment
-        # breakpoint()
 
         # Create a dataframe mapping preds onto sequence
         # alignment.aligned gives nested lists describing the aligned regions
         # For example, it might be [[[0,5], [10,15]], [[0,5], [15,20]]]
-        # This means residues 0-4 of sequence 1 align with 0-4 of sequence 2, and residues 10-14 of sequence 1 align to 15-19 of sequence 2
+        # This means residues 0-4 of sequence 1 align with 0-4 of sequence 2, and 
+        # residues 10-14 of sequence 1 align to 15-19 of sequence 2
         seq_df_aligned_regions = alignment.aligned[0]
         preds_aligned_regions = alignment.aligned[1]
 
         seq_df_aligned_residues = []
-        for region in seq_df_aligned_regions: seq_df_aligned_residues += list(range(region[0], region[1]))
+        for region in seq_df_aligned_regions: 
+            seq_df_aligned_residues += list(range(region[0], region[1]))
         preds_aligned_residues = []
-        for region in preds_aligned_regions: preds_aligned_residues += list(range(region[0], region[1]))
+        for region in preds_aligned_regions: 
+            preds_aligned_residues += list(range(region[0], region[1]))
 
         preds = preds.iloc[preds_aligned_residues, :]       # Discard predictions that are not in the alignment
         preds.index = seq_df.index[seq_df_aligned_residues] # Index the predictions with their position in sequence
@@ -594,8 +597,6 @@ class SNAPS_assigner:
         preds_p1.index = preds_p1.Res_name_m1   # Note _m1, because we need to transfer the chemical shift to the i-1 residue!
         aligned_preds = pd.merge(aligned_preds, preds_p1[["N"]], how="left",
                          left_index=True, right_index=True, suffixes=["", "_p1"])
-        
-        # Output the alignment in human-readable form.
 
         # Output info to log
         self.logger.info("Aligned %d predicted residues to sequence" % ((~aligned_preds.Pred_name.isna()).sum()))
@@ -603,6 +604,48 @@ class SNAPS_assigner:
         
         self.aligned_preds = aligned_preds
         return(aligned_preds)
+    
+    def create_generic_predictions(self):
+        """Create a set of predicted shifts based only on residue type. 
+        These can be used where there are missing predictions from the structure.
+
+        Returns a dataframe with the generic shift predictions for each residue.
+        """
+        generic_preds = self.aligned_preds.copy()
+        generic_preds = generic_preds.loc[:,self.seq_df.columns]
+
+        # Import the average shifts for each residue type
+        residue_shifts = pd.read_csv(self.pars["generic_shift_file"], index_col=0)
+        
+        # Create the generic shift predictions
+        atom_list = ["H", "N", "C", "CA", "CB", "HA"]
+        for atom in atom_list: generic_preds[atom] = np.nan
+
+        for res in residue_shifts.index:
+            for atom in atom_list:
+                generic_preds.loc[generic_preds.Res_type==res, atom] = residue_shifts.loc[res, atom]
+
+        # Create the i-1 and i+1 columns
+        generic_preds.index = generic_preds.Res_name
+        generic_preds.index.name = None
+        preds_m1 = generic_preds[list({"C","CA","CB", "N","Res_type","Res_name", "Res_name_p1"}.
+                              intersection(generic_preds.columns))].copy()
+        preds_m1.index = preds_m1.Res_name_p1   # Note _p1, because we need to transfer the chemical shift to the i+1 residue!
+        generic_preds = pd.merge(generic_preds, preds_m1[["C","CA","CB", "N"]], how="left",
+                         left_index=True, right_index=True, suffixes=["", "_m1"])
+        
+        preds_p1 = generic_preds[list({"N","Res_type","Res_name", "Res_name_m1"}.
+                              intersection(generic_preds.columns))].copy()
+        preds_p1.index = preds_p1.Res_name_m1   # Note _m1, because we need to transfer the chemical shift to the i-1 residue!
+        generic_preds = pd.merge(generic_preds, preds_p1[["N"]], how="left",
+                         left_index=True, right_index=True, suffixes=["", "_p1"])
+        
+        # Restrict to atom types in preds 
+        col_mask = generic_preds.columns.isin(self.aligned_preds.columns) 
+        generic_preds = generic_preds.loc[:,col_mask]
+
+        self.generic_preds = generic_preds
+        return(generic_preds)
 
     def prepare_obs_preds(self):
         """Perform preprocessing on the observed and predicted shifts to prepare
@@ -620,7 +663,6 @@ class SNAPS_assigner:
 
         #### Restrict atom types
         # self.pars["atom_set"] is the set of atoms to be used in the analysis
-
         # Get all non-atom columns
         all_atoms = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA", "N_m1", "N_p1"}
         obs_metadata = list(set(obs.columns).difference(all_atoms))
@@ -646,7 +688,6 @@ class SNAPS_assigner:
         proline_obs["SS_name"] = prolines
         proline_obs["Dummy_SS"] = True
         obs = pd.concat([obs, proline_obs])
-        # breakpoint()
 
         # Add extra dummy residues or spin systems, so that there are equal numbers
         N = len(obs.index)
@@ -676,8 +717,8 @@ class SNAPS_assigner:
 
         return(self.obs, self.preds)
 
-
-    def calc_prob_matrix(self, atom_sd=None, glycine_CB_penalty=0.01,
+    def calc_prob_matrix(self, preds=None, atom_sd=None, atom_res_sd=None, 
+                         glycine_CB_penalty=0.01, delta_correlation=None, 
                          normalise_by=None):
         """Calculate a matrix of probabilities based on match between observed
         and predicted chemical shifts.
@@ -691,30 +732,34 @@ class SNAPS_assigner:
         A DataFrame containing the probabilities
 
         Parameters
+        preds: The predictions to use when calculating the probability. If None,
+            the aligned_predictions are used.
         atom_sd: A dictionary containing the expected standard error in the
             predictions for each atom type
         glycine_CB_penalty: How much to penalise the probability that an 
-        observation corresponds to a glycine if it has a CB chemical shift
-        normalise_by: If "SS" or "Res", the sum of probabilities is normalised 
-        to 1 along that axis. If None, no normalisation is done.
+            observation corresponds to a glycine if it has a CB chemical shift
+            normalise_by: If "SS" or "Res", the sum of probabilities is normalised 
+            to 1 along that axis. If None, no normalisation is done.
         """
 
         obs = self.obs.copy()
-        preds = self.aligned_preds.copy()
+        if preds is None:
+            preds = self.aligned_preds.copy()  
         atoms = list(self.pars["atom_set"].intersection(obs.columns))
         prob_matrix = pd.DataFrame(1.0, index=obs.index, columns=preds.index)
         prob_matrix.index.name = "SS_name"
         prob_matrix.columns.name = "Res_name"
+        if delta_correlation is None:
+            delta_correlation = self.pars["delta_correlation"]
 
         # Use default atom_sd values if not defined
         if atom_sd==None:
             atom_sd = self.pars["atom_sd"]
 
-        if self.pars["delta_correlation"]:
+        if delta_correlation:
             # Import parameters describing the delta correlations
             # Note: this also sorts the atom types in d_mean and c_cov into the
             # same order as the 'atoms' list defined above.
-
             d_mean = pd.read_csv(self.pars["delta_correlation_mean_file"],
                                     header=None, index_col=0).loc[atoms,1]
             d_cov = (pd.read_csv(self.pars["delta_correlation_cov_file"],
@@ -747,17 +792,32 @@ class SNAPS_assigner:
             # Make sure delta_atom is entirely numeric, with any NAs replaced with 0
             delta_atom = delta_atom.fillna(0.0).astype(float)
 
-            if self.pars["delta_correlation"]:
+            if delta_correlation:
                 # Store delta matrix for this atom type for later analysis
                 delta_list = delta_list + [delta_atom.values]
             else:
                 # Calculate probability density and apply to probability matrix
-                prob_atom = pd.DataFrame(norm.pdf(delta_atom, scale=atom_sd[atom]), 
+                if atom_res_sd is None:
+                    prob_atom = pd.DataFrame(norm.pdf(delta_atom, scale=atom_sd[atom]), 
                                         index=obs.index, columns=preds.index)
+                else:
+                    # If atom is from a neighbouring residue, choose the appropriate atom type.
+                    atom2 =  atom
+                    if atom2=="C_m1": atom2 = "C"
+                    if atom2=="CA_m1": atom2 = "CA"
+                    if atom2=="CB_m1": atom2 = "CB"
+                    if atom2 in ["N_m1","N_p1"]: atom2 = "N"
+
+                    prob_atom = pd.DataFrame(1.0, index=obs.index, columns=preds.index)
+                    for res in atom_res_sd.index:
+                        mask = preds.Res_type==res
+                        tmp = norm.pdf(delta_atom.loc[:,mask], scale=atom_res_sd.loc[res, atom2])
+                        prob_atom.loc[:,mask] = pd.DataFrame(tmp, 
+                                        index=obs.index, columns=preds.index[mask])
 
                 prob_matrix = prob_matrix * prob_atom
 
-        if self.pars["delta_correlation"]:
+        if delta_correlation:
             self.logger.info("Accounting for correlated prediction errors")
 
             # Combine the delta matrixes from each atom type into a single 3D matrix
@@ -792,7 +852,7 @@ class SNAPS_assigner:
 
         # Replace any zero probabilities which a very small number
         # (Zero probabilities can happen due to rounding error, I think)
-        prob_matrix[prob_matrix==0] = 1e-200
+        prob_matrix[prob_matrix==0] = 1e-100
 
         # Do the normalisation, if needed
         if normalise_by=="Res":
@@ -803,8 +863,35 @@ class SNAPS_assigner:
         self.logger.info("Calculated probability matrix (%dx%d)",
                          prob_matrix.shape[0], prob_matrix.shape[1])
         
-        self.prob_matrix = prob_matrix
+        # self.prob_matrix = prob_matrix
         return(prob_matrix)
+
+    def calc_generic_prob_matrix(self, only_missing_preds=True):
+        """Calculate a probability matrix using generic shift predictions.
+        This can be used in place of the probability matrix from predictions, 
+        or used to compensate for missing predictions.
+        
+        Parameters:
+        only_missing_preds: if True, only generic predictions from atoms with 
+        missing predicted shifts are used.
+
+        Returns
+        The probability matrix"""
+        generic_preds = self.generic_preds.copy()
+        preds = self.aligned_preds
+
+        # Remove generic predictions for atoms with a real prediction
+        if only_missing_preds:
+            cols = generic_preds.columns[generic_preds.columns.isin(self.pars["atom_set"])]
+            generic_preds[~preds.loc[:,cols].isna()] = np.nan
+            # breakpoint()
+
+        # Import average generic shifts and standard deviations
+        generic_stdev = pd.read_csv(self.pars["generic_shift_stdev_file"], index_col=0)
+
+        # Calculate the probability matrix
+        generic_prob_matrix = self.calc_prob_matrix(preds=generic_preds, atom_res_sd=generic_stdev, glycine_CB_penalty=1.0, delta_correlation=False)
+        return(generic_prob_matrix)
 
     def calc_log_prob_matrix(self, prob_matrix=None):
         """Calculate a log probability matrix from a probability matrix
@@ -941,8 +1028,6 @@ class SNAPS_assigner:
             else:
                 # Make a note of NA positions in delta, and set them to zero
                 # (this avoids warnings when using norm.logpdf)
-                # breakpoint()
-                # na_mask = np.isnan(delta_atom)
                 na_mask = delta_atom.isna()
                 delta_atom[na_mask] = 0.0
                 delta_atom = delta_atom.astype(float)
@@ -969,7 +1054,6 @@ class SNAPS_assigner:
             delta_mat = np.moveaxis(delta_mat, 0, -1)
 
             # Make a note of NA positions in delta, and set them to zero
-            breakpoint()
             # na_mask = delta_mat.isna()
             # delta_mat[na_mask] = 0.0
             
