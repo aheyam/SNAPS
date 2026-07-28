@@ -719,6 +719,26 @@ if "consistent" in args.test or "all" in args.test:
 
         save_summary_plot(assigns_consistent, summary_consistent, out_dir)
 
+if "consistent_generic" in args.test or "all" in args.test:
+    out_dir = "consistent_generic"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        
+        for i in id_all:
+            print((path/("output/testset/"+testset_df.loc[i, "out_name"]+".txt")).as_posix())
+            cmd = make_cmd(i, out_dir, "test/config_consistent_generic.yaml")
+            run(cmd)
+
+    if args.analyse:
+        id_tmp = id_all
+        for x in ["A018","A019","A043","A065"]: id_tmp.remove(x)
+        assigns_consistent_generic = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_tmp)
+        summary_consistent_generic = summarise_results(assigns_consistent_generic)
+        summary_consistent_generic.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
+
+        save_summary_plot(assigns_consistent_generic, summary_consistent_generic, out_dir)
+
 if "consistent_2" in args.test or "all" in args.test:
     out_dir = "consistent_2"
     if args.assign:
