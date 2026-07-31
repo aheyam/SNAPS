@@ -710,8 +710,10 @@ class SNAPS_assigner:
             obs = pd.concat([obs, dummies])
             self.logger.info("Added %d dummy observed residues" % len(dummies.index))
 
+        obs = obs.sort_values("SS_name")
         obs.index = obs.SS_name
         obs.index.name = None
+
         self.obs = obs.copy()
         self.aligned_preds = preds.copy()
 
@@ -902,12 +904,12 @@ class SNAPS_assigner:
         Returns
         A DataFrame containing the log probabilities
         """
-        if prob_matrix==None:
+        if prob_matrix is None:
             prob_matrix = self.prob_matrix
         
         log_prob_matrix = np.log10(prob_matrix)
 
-        self.log_prob_matrix = log_prob_matrix
+        # self.log_prob_matrix = log_prob_matrix
         return(log_prob_matrix)
 
     def calc_log_prob_matrix_old(self, atom_sd=None, sf=1, default_prob=0.01):
@@ -1171,12 +1173,42 @@ class SNAPS_assigner:
                 mismatch_matrix = mismatch_matrix.combine(abs(mismatch_atom), np.maximum)
                 consistent_links_matrix = consistent_links_matrix + consistent_links_atom
 
+            allowed_links_matrix = (mismatch_matrix < 0.2).astype(int)
+            for i in allowed_links_matrix.index: allowed_links_matrix.loc[i, i] = 0     # Set diagonal to zero
+
             self.logger.info("Calculated mismatch and consistent_links matrixes (%dx%d)",
                          mismatch_matrix.shape[0], mismatch_matrix.shape[1])
 
             self.mismatch_matrix = mismatch_matrix
             self.consistent_links_matrix = consistent_links_matrix
+            self.allowed_links_matrix = allowed_links_matrix
             return(self.mismatch_matrix, consistent_links_matrix)
+
+    def calc_triplet_prob_matrix(self, prob_matrix=None, allowed_links_matrix=None):
+        """ Calculate the probability that each spin system is assigned to a given residue, 
+        summed over all possible triplets, accounting for allowed sequential links.
+
+        """
+        if prob_matrix is None:
+            prob_matrix = self.prob_matrix
+
+        if allowed_links_matrix is None:
+            allowed_links_matrix = self.allowed_links_matrix
+
+        # Calculate matrixes for probability contribution of i-1 and i+1 residues
+        left_matrix = allowed_links_matrix.transpose().dot(prob_matrix)
+        right_matrix = allowed_links_matrix.dot(prob_matrix)
+
+        # Shift values left or right
+        left_matrix = left_matrix.shift(1, axis=1).fillna(1)
+        right_matrix = right_matrix.shift(-1, axis=1).fillna(1)
+
+        # Calculate the triplet probability matrix
+        triplet_prob_matrix = left_matrix * prob_matrix * right_matrix
+        triplet_prob_matrix.index.name = "SS_name"
+
+        self.triplet_prob_matrix = triplet_prob_matrix
+        return(triplet_prob_matrix)
 
     def find_best_assignment(self, score_matrix, maximise=True, inc=None, exc=None, exc_mask=None,
                              dummy_rows=[], dummy_cols=[], return_none_all_dummy=False):
@@ -1333,7 +1365,7 @@ class SNAPS_assigner:
 
         return(assign_df)
 
-    def assign_from_preds(self, set_assign_df=False, inc=None, exc=None):
+    def assign_from_preds(self, log_prob_matrix=None, set_assign_df=False, inc=None, exc=None):
         """Assign the observed spin systems using predicted shifts only
 
         This function essentially wraps around find_best_assignment() and
@@ -1342,7 +1374,10 @@ class SNAPS_assigner:
             First column has the index names, second has the column names.
         exc: a DataFrame of (row, col) pairs which may not be part of the assignment.
         """
-        matching = self.find_best_assignment(self.log_prob_matrix, maximise=True, inc=inc, exc=exc)
+        if log_prob_matrix is None:
+            log_prob_matrix = self.log_prob_matrix
+
+        matching = self.find_best_assignment(log_prob_matrix, maximise=True, inc=inc, exc=exc)
         assign_df = self.make_assign_df(matching, set_assign_df)
 
         self.logger.info("Finished calculating best assignment based on predictions")

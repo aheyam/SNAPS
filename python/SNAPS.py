@@ -204,14 +204,21 @@ def runSNAPS(system_args):
         a.generic_prob_matrix = a.calc_generic_prob_matrix()
         a.prob_matrix *= a.generic_prob_matrix
         
-    a.calc_log_prob_matrix()
+    a.log_prob_matrix = a.calc_log_prob_matrix()
     # a.calc_log_prob_matrix_old()
     a.calc_mismatch_matrix()
+    
+
 
     if a.pars["iterate_until_consistent"] == 1:
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
-        a.assign_from_preds(set_assign_df=True)
+        if a.pars["use_triplet_prob_matrix"]:
+            triplet_prob_matrix = a.calc_triplet_prob_matrix()
+            triplet_log_prob_matrix = a.calc_log_prob_matrix(triplet_prob_matrix)
+            a.assign_from_preds(log_prob_matrix=triplet_log_prob_matrix, set_assign_df=True)
+        else:
+            a.assign_from_preds(set_assign_df=True)
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
         if (a.pars["alt_assignments"] > 0):
             a.find_alt_assignments(N=a.pars["alt_assignments"])
