@@ -906,7 +906,11 @@ class SNAPS_assigner:
         """
         if prob_matrix is None:
             prob_matrix = self.prob_matrix
-        
+
+        # Remove any zeroes, by setting them to the minimum value in the matrix
+        replacement_value = min(prob_matrix[prob_matrix>0].min().min(), 1e-200)
+        prob_matrix[prob_matrix==0] = replacement_value
+
         log_prob_matrix = np.log10(prob_matrix)
 
         # self.log_prob_matrix = log_prob_matrix
