@@ -89,6 +89,9 @@ def get_arguments(system_args):
     parser.add_argument("--hsqc_plot",
                         action="store_true",
                         help="Output an HSQC plot of the assignments.")
+    parser.add_argument("--probability_plot",
+                        action="store_true",
+                        help="Output a heatmap of the residue assignment probabilities.")
 
 
 
@@ -124,6 +127,7 @@ def get_arguments(system_args):
                                   "-c","config/config_yaml_2.txt",  # "-c","config/test/config_consistent_2.yaml",
                                   "--strip_plot",
                                   "--hsqc_plot",
+                                  "--probability_plot",
                                   "--test", args.test))
     return(args)
 
@@ -302,17 +306,18 @@ def runSNAPS(system_args):
         logger.info("Finished writing strip plot to strip_plot.htm")
         plots += [strip_plot]
 
-    matching = a.assign_df.loc[:,["Res_name","SS_name"]]
-    prob_plot = a.plot_prob_matrix(a.log_prob_matrix, matching, -10, 0,
-                                   output_dir/"probability_plot.htm", "html",
-                                   plot_width=750)
-    
-    if a.pars["use_triplet_prob_matrix"]:
-            prob_plot = a.plot_prob_matrix(a.triplet_log_prob_matrix, matching, -10, 0,
-                                        output_dir/"triplet_probability_plot.htm", "html",
-                                        plot_width=750)
+    if args.probability_plot:
+        matching = a.assign_df.loc[:,["Res_name","SS_name"]]
+        prob_plot = a.plot_prob_matrix(a.log_prob_matrix, matching, -10, 0,
+                                    output_dir/"probability_plot.htm", "html",
+                                    plot_width=750)
+        
+        if a.pars["use_triplet_prob_matrix"]:
+                prob_plot = a.plot_prob_matrix(a.triplet_log_prob_matrix, matching, -10, 0,
+                                            output_dir/"triplet_probability_plot.htm", "html",
+                                            plot_width=750)
 
-    plots += [prob_plot]
+        plots += [prob_plot]
     # Close the log file
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
