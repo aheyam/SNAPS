@@ -218,15 +218,25 @@ def runSNAPS(system_args):
     if a.pars["iterate_until_consistent"] == 1:
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
-        if a.pars["use_triplet_prob_matrix"]:
-            a.triplet_prob_matrix = a.calc_triplet_prob_matrix(normalise_by="Res")
-            a.triplet_log_prob_matrix = a.calc_log_prob_matrix(a.triplet_prob_matrix)
-            a.assign_from_preds(log_prob_matrix=a.triplet_log_prob_matrix, set_assign_df=True)
-        else:
-            a.assign_from_preds(set_assign_df=True)
+        a.assign_from_preds(set_assign_df=True)
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
         if (a.pars["alt_assignments"] > 0):
             a.find_alt_assignments(N=a.pars["alt_assignments"])
+
+        if a.pars["triplet_prob_iterations"] > 0:
+            triplet_prob_list = [a.prob_matrix]
+            triplet_log_prob_list = [a.log_prob_matrix]
+            triplet_assign_df_list = [a.assign_df]
+            for i in range(a.pars["triplet_prob_iterations"]):
+                triplet_prob_matrix = a.calc_triplet_prob_matrix(prob_matrix=triplet_prob_list[i], normalise_by="Res")
+                triplet_log_prob_matrix = a.calc_log_prob_matrix(triplet_prob_matrix)
+                triplet_assign_df = a.assign_from_preds(log_prob_matrix=triplet_log_prob_matrix, set_assign_df=False)
+                triplet_assign_df = a.add_consistency_info(input_assign_df=triplet_assign_df, threshold=a.pars["seq_link_threshold"])
+                
+                triplet_prob_list += [triplet_prob_matrix]
+                triplet_log_prob_list += [triplet_log_prob_matrix]
+                triplet_assign_df_list += [triplet_assign_df]
+       
             
     if a.pars["iterate_until_consistent"] == 2:
         high_conf_assn = a.assign_df.loc[a.assign_df.Confidence=="High", ["Res_name", "SS_name"]]
@@ -311,13 +321,18 @@ def runSNAPS(system_args):
         prob_plot = a.plot_prob_matrix(a.log_prob_matrix, matching, -10, 0,
                                     output_dir/"probability_plot.htm", "html",
                                     plot_width=750)
-        
-        if a.pars["use_triplet_prob_matrix"]:
-                prob_plot = a.plot_prob_matrix(a.triplet_log_prob_matrix, matching, -10, 0,
-                                            output_dir/"triplet_probability_plot.htm", "html",
+        plots += [prob_plot]
+   
+    if a.pars["triplet_prob_iterations"] > 0:
+        for i in range(a.pars["triplet_prob_iterations"]):
+            if args.strip_plot:
+                a.plot_strips(output_dir/("triplet_strip_plot_iteration_%d.htm" % (i+1)), "html", assign_df=triplet_assign_df_list[i+1])
+            if args.probability_plot:
+                matching = a.assign_df.loc[:,["Res_name","SS_name"]]
+                a.plot_prob_matrix(triplet_log_prob_list[i+1], matching, -10, 0,
+                                            output_dir/("triplet_probability_plot_iteration_%d.htm" % (i+1)), "html",
                                             plot_width=750)
 
-        plots += [prob_plot]
     # Close the log file
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])

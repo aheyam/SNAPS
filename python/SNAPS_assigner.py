@@ -2579,7 +2579,7 @@ class SNAPS_assigner:
         return(0)
 
 
-    def plot_strips(self, outfile=None, format="html", return_json=True, plot_width=1000):
+    def plot_strips(self, outfile=None, format="html", return_json=True, plot_width=1000, assign_df=None):
         """Make a strip plot of the assignment.
 
         Uses bokeh module for plotting. Returns the bokeh plot object.
@@ -2589,7 +2589,11 @@ class SNAPS_assigner:
         return_json: if tue, return the plot as a json object
         plot_width: The width of the output plot in pixels
         """
-        df = self.assign_df
+        if assign_df is None:
+            df = self.assign_df
+        else:
+            df = assign_df
+            
         plotlist = []
 
         if not self.sequential_atoms_present(df.columns):
