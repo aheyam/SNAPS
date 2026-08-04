@@ -53,6 +53,138 @@ def df_lookup(df, row_labels, col_labels, index="rows"):
     else:
         return(pd.Series(df.to_numpy()[df.index.get_indexer(row_labels), df.columns.get_indexer(col_labels)], index=row_labels))
 
+def heatmap(x, y, z, x_range=None, y_range=None, palette=None, z_range=(None, None),
+            x_label="x", y_label="y", z_label="z", flip_x_axis=False, flip_y_axis=False,
+            colorbar=True, plot_height=750, plot_width=750, **kwargs):
+    """Create a heatmap for x, y, z data where the x and y data are categorial.
+    Borrowed from https://justinbois.github.io/bootcamp/2023_epfl/exercise_solutions/exercise_5/exercise_5.5_solution.html
+
+    Parameters
+    ----------
+    x : array_like
+        x-values for heat map. Assumed to be categorical. Any entries are
+        converted to strings.
+    y : array_like
+        y-values for heat map. Assumed to be categorical. Any entries are
+        converted to strings.
+    z : array_like
+        z-values for heat map. These data are quantitative and displayed
+        with color.
+    x_range : array_like
+        Array of unique values that determines the values of the x-axis.
+    y_range : array_like
+        Array of unique values that determines the values of the y-axis.
+    palette : List of hex colors, default bokeh.palettes.Viridis256
+        Color palette to use to make linear color mapper for heat map.
+    z_range : 2-tuple, default (None, None)
+        Range of allowed z-values. If an entry is None, the min or max
+        is used.
+    x_label : str, defualt "z"
+        Label to be used in tool tips for the x-values.
+    y_label : str, defualt "z"
+        Label to be used in tool tips for the y-values.
+    z_label : str, defualt "z"
+        Label to be used in tool tips for the z-values.
+    flip_x_axis : bool, default False
+        If True, x-axis is reversed.
+    flip_y_axis : bool, default False
+        If True, y-axis is reversed.
+    colorbar : bool, default True
+        If True, display color bar.
+    kwargs : dict
+        All other kwargs are passed to bokeh.plotting.figure() when
+        setting up the plot.
+
+    Returns
+    -------
+    output : Bokeh plotting object
+        Heatmap plot.
+    """
+    import bokeh.io
+    import bokeh.models
+    import bokeh.palettes
+    import bokeh.plotting
+
+    # Convert x and y values to strings; assuming evenly spread
+    x_str = [str(x_val) for x_val in x]
+    y_str = [str(y_val) for y_val in y]
+
+    # Ranges of z-values
+    z_min = z.min() if z_range[0] is None else z_range[0]
+    z_max = z.max() if z_range[1] is None else z_range[1]
+
+    # Categorical axis values
+    if x_range is None:
+        x_range = [str(x_val) for x_val in sorted(np.unique(x))]
+    if y_range is None:
+        y_range = [str(y_val) for y_val in sorted(np.unique(y))]
+    if flip_x_axis:
+        x_range = x_range[::-1]
+    if flip_y_axis:
+        y_range = y_range[::-1]
+
+    # Set up defaults
+    x_axis_label = kwargs.pop("x_axis_label", x_label)
+    y_axis_label = kwargs.pop("y_axis_label", y_label)
+    tools = kwargs.pop("tools", "pan,box_zoom,wheel_zoom,reset,hover,save")
+    tooltips = kwargs.pop(
+        "tooltips", [(x_label, "@x"), (y_label, "@y"), (z_label, "@z")]
+    )
+    toolbar_location = kwargs.pop("toolbar_location", "above")
+    frame_height = kwargs.pop("frame_height", None)
+    frame_width = kwargs.pop("frame_width", None)
+
+    # Adjust frame heights and widths to have square rectangles
+    if frame_width is not None:
+        if frame_height is None:
+            frame_height = frame_width * len(y_range) // len(x_range)
+    else:
+        if frame_height is None:
+            frame_height = 250
+        frame_width = frame_height * len(x_range) // len(y_range)
+
+    # Data source
+    source = bokeh.models.ColumnDataSource(
+        dict(x_str=x_str, y_str=y_str, x=x, y=y, z=z)
+    )
+
+    # Color mapper
+    if palette is None: palette = bokeh.palettes.Viridis256
+    mapper = bokeh.models.LinearColorMapper(palette=palette, low=z_min, high=z_max)
+
+    # Figure
+    p = bokeh.plotting.figure(
+        x_range=x_range,
+        y_range=y_range,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        x_axis_label=x_axis_label,
+        y_axis_label=y_axis_label,
+        tools=tools,
+        tooltips=tooltips,
+        toolbar_location=toolbar_location,
+        # height=plot_height,
+        # width=plot_width,
+        **kwargs
+    )
+
+    p.rect(
+        x="x_str",
+        y="y_str",
+        width=frame_width / frame_height * len(y_range) / len(x_range),
+        height=frame_height / frame_width * len(x_range) / len(y_range),
+        source=source,
+        fill_color={"field": "z", "transform": mapper},
+        line_color=None,
+    )
+
+    # Add color bar
+    color_bar = bokeh.models.ColorBar(
+        color_mapper=mapper, major_label_text_font_size="8px", border_line_color=None,
+    )
+    p.add_layout(color_bar, "right")
+
+    return(p)
 
 class SNAPS_assigner:
     # Functions
@@ -858,9 +990,9 @@ class SNAPS_assigner:
 
         # Do the normalisation, if needed
         if normalise_by=="Res":
-            prob_matrix = prob_matrix / prob_matrix.sum(axis=0)
+            prob_matrix = (prob_matrix / prob_matrix.sum(axis=0))
         elif normalise_by=="SS":
-            prob_matrix = prob_matrix / prob_matrix.sum(axis=1)
+            prob_matrix = (prob_matrix / prob_matrix.sum(axis=1))
 
         self.logger.info("Calculated probability matrix (%dx%d)",
                          prob_matrix.shape[0], prob_matrix.shape[1])
@@ -868,7 +1000,7 @@ class SNAPS_assigner:
         # self.prob_matrix = prob_matrix
         return(prob_matrix)
 
-    def calc_generic_prob_matrix(self, only_missing_preds=True):
+    def calc_generic_prob_matrix(self, only_missing_preds=True, normalise_by=None):
         """Calculate a probability matrix using generic shift predictions.
         This can be used in place of the probability matrix from predictions, 
         or used to compensate for missing predictions.
@@ -893,6 +1025,13 @@ class SNAPS_assigner:
 
         # Calculate the probability matrix
         generic_prob_matrix = self.calc_prob_matrix(preds=generic_preds, atom_res_sd=generic_stdev, glycine_CB_penalty=1.0, delta_correlation=False)
+
+        # Do the normalisation, if needed
+        if normalise_by=="Res":
+            generic_prob_matrix = (generic_prob_matrix / generic_prob_matrix.sum(axis=0))
+        elif normalise_by=="SS":
+            generic_prob_matrix = (generic_prob_matrix / generic_prob_matrix.sum(axis=1))
+
         return(generic_prob_matrix)
 
     def calc_log_prob_matrix(self, prob_matrix=None):
@@ -1188,7 +1327,7 @@ class SNAPS_assigner:
             self.allowed_links_matrix = allowed_links_matrix
             return(self.mismatch_matrix, consistent_links_matrix)
 
-    def calc_triplet_prob_matrix(self, prob_matrix=None, allowed_links_matrix=None):
+    def calc_triplet_prob_matrix(self, prob_matrix=None, allowed_links_matrix=None, normalise_by=None):
         """ Calculate the probability that each spin system is assigned to a given residue, 
         summed over all possible triplets, accounting for allowed sequential links.
 
@@ -1210,6 +1349,12 @@ class SNAPS_assigner:
         # Calculate the triplet probability matrix
         triplet_prob_matrix = left_matrix * prob_matrix * right_matrix
         triplet_prob_matrix.index.name = "SS_name"
+
+        # Do the normalisation, if needed
+        if normalise_by=="Res":
+            triplet_prob_matrix = (triplet_prob_matrix / triplet_prob_matrix.sum(axis=0))
+        elif normalise_by=="SS":
+            triplet_prob_matrix = (triplet_prob_matrix / triplet_prob_matrix.sum(axis=1))
 
         self.triplet_prob_matrix = triplet_prob_matrix
         return(triplet_prob_matrix)
@@ -2649,6 +2794,38 @@ class SNAPS_assigner:
         # Change legend layout
         plt.legend.orientation = "horizontal"
 
+        if outfile is not None:
+            Path(outfile).resolve().parents[1].mkdir(parents=True, exist_ok=True)
+            if format=="html":
+                output_file(outfile)
+                save(plt)
+            elif format=="png":
+                export_png(plt, outfile)
+
+        if return_json:
+            return(json_item(plt))
+        else:
+            return(plt)
+
+    def plot_prob_matrix(self, prob_matrix, matching=None, lower_limit=None, upper_limit=None,
+                         outfile=None, format="html", return_json=True, plot_width=750):
+        """Plot a heatmap showing the probability matrix."""
+        # Get names of Residues and spin systems
+        if matching is not None:
+            Res_names = matching.Res_name.to_list()
+            SS_names = matching.SS_name.to_list()
+        else:
+            Res_names = prob_matrix.columns.to_list()
+            SS_names = prob_matrix.index.to_list()
+
+        # Convert probability matrix from wide to long
+        prob_matrix = prob_matrix.reset_index()
+        prob_long = prob_matrix.melt(id_vars="SS_name", value_name="Probability")
+
+        plt = heatmap(x=prob_long.Res_name, y=prob_long.SS_name, z=prob_long.Probability,
+                    x_range=Res_names, y_range=SS_names, z_range=[lower_limit,upper_limit],
+                    frame_width=plot_width, frame_height=plot_width, flip_y_axis=True)
+        
         if outfile is not None:
             Path(outfile).resolve().parents[1].mkdir(parents=True, exist_ok=True)
             if format=="html":

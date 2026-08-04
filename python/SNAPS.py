@@ -197,12 +197,13 @@ def runSNAPS(system_args):
 
     #### Do the analysis
     a.prepare_obs_preds()
-    a.prob_matrix = a.calc_prob_matrix()
+    a.prob_matrix = a.calc_prob_matrix(normalise_by="Res")
 
     if a.pars["use_generic_predictions"]:
         a.create_generic_predictions()
         a.generic_prob_matrix = a.calc_generic_prob_matrix()
         a.prob_matrix *= a.generic_prob_matrix
+        a.prob_matrix = a.prob_matrix / a.prob_matrix.sum(axis=0)
         
     a.log_prob_matrix = a.calc_log_prob_matrix()
     # a.calc_log_prob_matrix_old()
@@ -214,9 +215,9 @@ def runSNAPS(system_args):
         a.assign_df = a.find_consistent_assignments(set_assign_df=True)
     else:
         if a.pars["use_triplet_prob_matrix"]:
-            triplet_prob_matrix = a.calc_triplet_prob_matrix()
-            triplet_log_prob_matrix = a.calc_log_prob_matrix(triplet_prob_matrix)
-            a.assign_from_preds(log_prob_matrix=triplet_log_prob_matrix, set_assign_df=True)
+            a.triplet_prob_matrix = a.calc_triplet_prob_matrix(normalise_by="Res")
+            a.triplet_log_prob_matrix = a.calc_log_prob_matrix(a.triplet_prob_matrix)
+            a.assign_from_preds(log_prob_matrix=a.triplet_log_prob_matrix, set_assign_df=True)
         else:
             a.assign_from_preds(set_assign_df=True)
         a.add_consistency_info(threshold=a.pars["seq_link_threshold"])
@@ -301,11 +302,20 @@ def runSNAPS(system_args):
         logger.info("Finished writing strip plot to strip_plot.htm")
         plots += [strip_plot]
 
+    matching = a.assign_df.loc[:,["Res_name","SS_name"]]
+    prob_plot = a.plot_prob_matrix(a.log_prob_matrix, matching, -10, 0,
+                                   output_dir/"probability_plot.htm", "html",
+                                   plot_width=750)
+    
+    if a.pars["use_triplet_prob_matrix"]:
+            prob_plot = a.plot_prob_matrix(a.triplet_log_prob_matrix, matching, -10, 0,
+                                        output_dir/"triplet_probability_plot.htm", "html",
+                                        plot_width=750)
+
+    plots += [prob_plot]
     # Close the log file
     logger.handlers[0].close()
     logger.removeHandler(logger.handlers[0])
-
-    # breakpoint()
 
     return(plots)
 
