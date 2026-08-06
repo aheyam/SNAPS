@@ -18,7 +18,7 @@ from plotnine.ggplot import save_as_pdf_pages
 from pathlib import Path
 import argparse
 
-def import_testset_shifts(filename, remove_Pro=True, 
+def import_testset_shifts(filename, remove_Pro=True, average_Gly_HA=True,
                           short_aa_names=True, SS_class=None, SS_class_m1=None):
     """ Import observed chemical shifts from testset data
     
@@ -72,6 +72,11 @@ def import_testset_shifts(filename, remove_Pro=True,
     obs = pd.merge(obs, obs_m1, how="left", left_index=True, 
                     right_index=True)
     
+    # Average glycine HAs if needed
+    if average_Gly_HA and "HA3" in (obs.columns) and "HA2" in (obs.columns):
+        mask = (obs.Res_type=="G")
+        obs.loc[mask, "HA"] = obs.loc[mask, ["HA2", "HA3"]].mean(axis=1)
+
     # Restrict to specific atom types
     atom_set = {"H","N","C","CA","CB","C_m1","CA_m1","CB_m1","HA"}
     obs = obs[["Res_N","Res_type","Res_type_m1","SS_name"]+
@@ -313,7 +318,6 @@ for i in testset_df.ID:
     
     #Change Bs to Cs
     obs.loc[obs["Res_type"]=="B", "Res_type"] = "C"
-
     # Convert wide to long
     obs = obs.melt(id_vars=["SS_name", "Res_N", "Res_type", "Res_type_m1"],
                    value_vars=set(obs.columns).intersection(atom_set), 
@@ -339,6 +343,7 @@ if args.plot:
     plt.save(path/"plots/error_dist"/"Observed shift completeness.pdf", height=150, width=200, units="mm")
 
 # Output mean and standard deviation of all atoms, by residue
+# Note that glycine HA values are the average of reported HA2 and HA3
 atoms = ["H","N","C","CA","CB","HA"]
 tmp = obs_all.groupby(["Atom_type", "Res_type"]).Shift.mean().reset_index()
 atom_res_mean = tmp.pivot(index="Res_type", columns="Atom_type", values="Shift")
