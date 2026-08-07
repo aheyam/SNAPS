@@ -379,10 +379,12 @@ if "generic_triplet" in args.test or "all" in args.test:
         # assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
         # summary_dc2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
 
-        assigns_generic_triplet = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all)
-        summary_generic_triplet = summarise_results(assigns_generic_triplet)
-        summary_generic_triplet.to_csv(path/("output/"+out_dir+"_summary.txt") , sep="\t", float_format="%.3f")
-        save_summary_plot(assigns_generic_triplet, summary_generic_triplet, out_dir)
+        for i in range(1,6):
+            assigns_generic_triplet = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all,
+                                                                assignment_file="triplet_assign_df_iteration_%d.tsv"%(i))
+            summary_generic_triplet = summarise_results(assigns_generic_triplet)
+            summary_generic_triplet.to_csv(path/("output/"+out_dir+"_summary_%d.txt"%(i)) , sep="\t", float_format="%.3f")
+            save_summary_plot(assigns_generic_triplet, summary_generic_triplet, out_dir+"_%d"%(i))
 
 #%% Test effect of including HADAMAC amino acid type information
 if "hadamac" in args.test or "all" in args.test:

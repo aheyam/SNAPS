@@ -990,9 +990,9 @@ class SNAPS_assigner:
 
         # Do the normalisation, if needed
         if normalise_by=="Res":
-            prob_matrix = (prob_matrix / prob_matrix.sum(axis=0))
+            prob_matrix = prob_matrix.div(prob_matrix.sum(axis=0), axis="columns")
         elif normalise_by=="SS":
-            prob_matrix = (prob_matrix / prob_matrix.sum(axis=1))
+            prob_matrix = prob_matrix.div(prob_matrix.sum(axis=1), axis="rows")
 
         self.logger.info("Calculated probability matrix (%dx%d)",
                          prob_matrix.shape[0], prob_matrix.shape[1])
@@ -1352,9 +1352,9 @@ class SNAPS_assigner:
 
         # Do the normalisation, if needed
         if normalise_by=="Res":
-            triplet_prob_matrix = (triplet_prob_matrix / triplet_prob_matrix.sum(axis=0))
+            triplet_prob_matrix = triplet_prob_matrix.div(triplet_prob_matrix.sum(axis=0), axis="columns")
         elif normalise_by=="SS":
-            triplet_prob_matrix = (triplet_prob_matrix / triplet_prob_matrix.sum(axis=1))
+            triplet_prob_matrix = triplet_prob_matrix.div(triplet_prob_matrix.sum(axis=1), axis="rows")
 
         self.triplet_prob_matrix = triplet_prob_matrix
         return(triplet_prob_matrix)

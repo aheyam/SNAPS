@@ -201,13 +201,14 @@ def runSNAPS(system_args):
 
     #### Do the analysis
     a.prepare_obs_preds()
-    a.prob_matrix = a.calc_prob_matrix(normalise_by="Res")
+    a.prob_matrix = a.calc_prob_matrix(normalise_by="SS")
 
     if a.pars["use_generic_predictions"]:
         a.create_generic_predictions()
         a.generic_prob_matrix = a.calc_generic_prob_matrix()
+        # breakpoint()
         a.prob_matrix *= a.generic_prob_matrix
-        a.prob_matrix = a.prob_matrix / a.prob_matrix.sum(axis=0)
+        a.prob_matrix = a.prob_matrix.div(a.prob_matrix.sum(axis=1), axis="rows")
         
     a.log_prob_matrix = a.calc_log_prob_matrix()
     # a.calc_log_prob_matrix_old()
@@ -228,7 +229,7 @@ def runSNAPS(system_args):
             triplet_log_prob_list = [a.log_prob_matrix]
             triplet_assign_df_list = [a.assign_df]
             for i in range(a.pars["triplet_prob_iterations"]):
-                triplet_prob_matrix = a.calc_triplet_prob_matrix(prob_matrix=triplet_prob_list[i], normalise_by="Res")
+                triplet_prob_matrix = a.calc_triplet_prob_matrix(prob_matrix=triplet_prob_list[i], normalise_by="SS")
                 triplet_log_prob_matrix = a.calc_log_prob_matrix(triplet_prob_matrix)
                 triplet_assign_df = a.assign_from_preds(log_prob_matrix=triplet_log_prob_matrix, set_assign_df=False)
                 triplet_assign_df = a.add_consistency_info(input_assign_df=triplet_assign_df, threshold=a.pars["seq_link_threshold"])
@@ -325,6 +326,8 @@ def runSNAPS(system_args):
    
     if a.pars["triplet_prob_iterations"] > 0:
         for i in range(a.pars["triplet_prob_iterations"]):
+            triplet_assign_df_list[i+1].to_csv(output_dir/("triplet_assign_df_iteration_%d.tsv" % (i+1)), sep="\t", float_format="%.3f",
+                           index=False)
             if args.strip_plot:
                 a.plot_strips(output_dir/("triplet_strip_plot_iteration_%d.htm" % (i+1)), "html", assign_df=triplet_assign_df_list[i+1])
             if args.probability_plot:
