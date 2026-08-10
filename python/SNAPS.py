@@ -209,7 +209,12 @@ def runSNAPS(system_args):
         # breakpoint()
         a.prob_matrix *= a.generic_prob_matrix
         a.prob_matrix = a.prob_matrix.div(a.prob_matrix.sum(axis=1), axis="rows")
-        
+    
+    # Test of probability normalisation
+    for i in range(20):
+        a.prob_matrix = a.prob_matrix.div(a.prob_matrix.sum(axis=0), axis="columns")
+        a.prob_matrix = a.prob_matrix.div(a.prob_matrix.sum(axis=1), axis="rows")
+
     a.log_prob_matrix = a.calc_log_prob_matrix()
     # a.calc_log_prob_matrix_old()
     a.calc_mismatch_matrix()
@@ -230,6 +235,11 @@ def runSNAPS(system_args):
             triplet_assign_df_list = [a.assign_df]
             for i in range(a.pars["triplet_prob_iterations"]):
                 triplet_prob_matrix = a.calc_triplet_prob_matrix(prob_matrix=triplet_prob_list[i], normalise_by="SS")
+                # Test of probability normalisation
+                for i in range(20):
+                    triplet_prob_matrix = triplet_prob_matrix.div(triplet_prob_matrix.sum(axis=0), axis="columns")
+                    triplet_prob_matrix = triplet_prob_matrix.div(triplet_prob_matrix.sum(axis=1), axis="rows")
+                
                 triplet_log_prob_matrix = a.calc_log_prob_matrix(triplet_prob_matrix)
                 triplet_assign_df = a.assign_from_preds(log_prob_matrix=triplet_log_prob_matrix, set_assign_df=False)
                 triplet_assign_df = a.add_consistency_info(input_assign_df=triplet_assign_df, threshold=a.pars["seq_link_threshold"])

@@ -365,8 +365,8 @@ if "generic_preds" in args.test or "all" in args.test:
         save_summary_plot(assigns_generic_preds, summary_generic_preds, out_dir)
 
 #%% Test effect of using triplet probabilities (as well as generic predictions)
-if "generic_triplet" in args.test or "all" in args.test:
-    out_dir = "generic_triplet"
+if "generic_triplet_repeated_norm" in args.test or "all" in args.test:
+    out_dir = "generic_triplet_repeated_norm"
     if args.assign:
         # Create output directory, if it doesn't already exist
         (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
