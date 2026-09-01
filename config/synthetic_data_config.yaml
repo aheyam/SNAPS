@@ -1,0 +1,17 @@
+# Configuration file for generating synthetic data for use with SNAPS
+atom_list: # Which atom types to include. Don't change indentation.
+    - H
+    - N
+    - HA
+    - CA
+    - CB
+    - C
+atom_prediction_error: # Standard deviation of prediction error for each atom. Don't change indentation.
+    H: 0.454
+    N: 2.429
+    HA: 0.227
+    C: 1.030
+    CA: 0.932
+    CB: 1.025
+generic_shift_file:             residue_shift_mean.csv      # File containing expected average chemical shift for each atom/residue pair
+generic_shift_stdev_file:       residue_shift_stdev.csv     # File containing expected standard deviation in chemical shift for each atom/residue pair
