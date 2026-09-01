@@ -386,6 +386,28 @@ if "generic_triplet_repeated_norm" in args.test or "all" in args.test:
             summary_generic_triplet.to_csv(path/("output/"+out_dir+"_summary_%d.txt"%(i)) , sep="\t", float_format="%.3f")
             save_summary_plot(assigns_generic_triplet, summary_generic_triplet, out_dir+"_%d"%(i))
 
+if "generic_triplet_repeated_norm_0p1_threshold" in args.test or "all" in args.test:
+    out_dir = "generic_triplet_repeated_norm_0p1_threshold"
+    if args.assign:
+        # Create output directory, if it doesn't already exist
+        (path/"output"/out_dir).mkdir(parents=True, exist_ok=True)
+        for i in id_all:
+            print(testset_df.loc[i, "out_name"])
+            cmd = make_cmd(i, out_dir, "test/config_generic_triplet_0p1_threshold.yaml", ["--strip_plot"])
+            run(cmd)
+
+    if args.analyse:
+        # assigns_dc2, summary_dc2 = check_assignment_accuracy(path/"output"/out_dir, testset_df, ID_list=id_all)
+        # summary_dc2.to_csv(path/("output/"+out_dir+"_summary.txt"), sep="\t", float_format="%.3f")
+
+        for i in range(1,6):
+            assigns_generic_triplet = collect_assignment_results(path/"output"/out_dir, testset_df, ID_list=id_all,
+                                                                assignment_file="triplet_assign_df_iteration_%d.tsv"%(i))
+            summary_generic_triplet = summarise_results(assigns_generic_triplet)
+            summary_generic_triplet.to_csv(path/("output/"+out_dir+"_summary_%d.txt"%(i)) , sep="\t", float_format="%.3f")
+            save_summary_plot(assigns_generic_triplet, summary_generic_triplet, out_dir+"_%d"%(i))
+
+
 #%% Test effect of including HADAMAC amino acid type information
 if "hadamac" in args.test or "all" in args.test:
     out_dir = "hadamac"
