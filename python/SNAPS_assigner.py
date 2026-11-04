@@ -702,8 +702,9 @@ class SNAPS_assigner:
         aligned_preds = pd.concat((seq_df, preds), axis=1)
         
         # If glycine HA is missing, replace it with average of HA2 and HA3
-        mask = aligned_preds.HA.isna()
-        aligned_preds.loc[mask, "HA"] = 0.5 * (aligned_preds.loc[mask, "HA2"] + aligned_preds.loc[mask, "HA3"])
+        if "HA2" in aligned_preds.columns and "HA3" in aligned_preds.columns:
+            mask = aligned_preds.HA.isna()
+            aligned_preds.loc[mask, "HA"] = 0.5 * (aligned_preds.loc[mask, "HA2"] + aligned_preds.loc[mask, "HA3"])
 
         # Remove atoms that are not used?
         cols_to_keep = ["Seq_N", "Res_N", "Res_type", "Res_name", "Res_name_m1", 
@@ -852,7 +853,7 @@ class SNAPS_assigner:
         return(self.obs, self.preds)
 
     def calc_prob_matrix(self, preds=None, atom_sd=None, atom_res_sd=None, 
-                         glycine_CB_penalty=0.01, delta_correlation=None, 
+                         glycine_CB_penalty=10e-10, delta_correlation=None, 
                          normalise_by=None):
         """Calculate a matrix of probabilities based on match between observed
         and predicted chemical shifts.
@@ -979,8 +980,8 @@ class SNAPS_assigner:
 
         # Pair up the proline dummy spin systems with the appropriate residue
         prolines = preds[preds.Res_type=="P"].Res_name
-        prob_matrix.loc[:, prolines] = 1e-10
-        prob_matrix.loc[prolines, :] = 1e-10
+        prob_matrix.loc[:, prolines] = 1e-100
+        prob_matrix.loc[prolines, :] = 1e-100
         for x in prolines:
             prob_matrix.loc[x, x] = 1.0
 
@@ -996,7 +997,7 @@ class SNAPS_assigner:
 
         self.logger.info("Calculated probability matrix (%dx%d)",
                          prob_matrix.shape[0], prob_matrix.shape[1])
-        
+
         # self.prob_matrix = prob_matrix
         return(prob_matrix)
 
