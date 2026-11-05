@@ -16,7 +16,7 @@ import argparse
 
 #### Import arguments
 parser = argparse.ArgumentParser(
-        description="Generate synthetic ovserved and predicted shifts")
+        description="Generate synthetic observed and predicted shifts")
 
 # Mandatory arguments
 parser.add_argument("output_dir",
@@ -50,6 +50,8 @@ for par_name, par in pars.items():
 obs_mean = pd.read_csv(pars["generic_shift_file"], index_col=0)
 obs_stdev = pd.read_csv(pars["generic_shift_stdev_file"], index_col=0)
 
+#breakpoint()
+
 # Calculate stdev of predicted shifts
 pred_stdev = obs_stdev.copy()
 for atom in pars["atom_list"]:
@@ -60,15 +62,18 @@ for atom in pars["atom_list"]:
 rng = np.random.default_rng(seed=args.seed)   # Set up numpy random number generator
 
 synthetic_datasets = []
+
+# Amino acid probabilities from Shen et al (2006) doi: 10.1016/j.physa.2006.03.004
+aa_list = list("ACDEFGHIKLMNPQRSTVWY")
+aa_prob = [ 0.0777, 0.,157, 0.053, 0.0656, 0.0405,
+            0.0691, 0.0227 ,0.0591, 0.0595, 0.096,
+            0.0238, 0.0427, 0.0469, 0.0393, 0.0526,
+            0.0694, 0.055, 0.0667, 0.0118, 0.0311]
+
 for x in range(args.N):
     # Generate the sequence
-    # Temporary bad sequence generator
-    sequence_list = [rng.choice(list("ACDEFGHIKLMNPQRSTVWY")) for i in range(args.seq_length)]
-    # TODO: use [rng.choice(aa_list, p=list_of_aa_probabilities) for i in range(args.seq_length)]
-    # this will allow you to have probabilities for each amino acid type.
-    # Need to calculate the probabilities from the testset proteins
-    # Possibly also extendable to probabilities conditional on previous amino acid,
-    # but may require a loop and selecting different columns of the transition matrix
+    sequence_list = [rng.choice(aa_list, p=aa_prob) for i in range(args.seq_length)]
+
 
     df = pd.DataFrame({"Res_N":range(1,args.seq_length+1), "Res_type":sequence_list})
     df["Res_name"] = df.Res_N.astype(str) + df.Res_type
