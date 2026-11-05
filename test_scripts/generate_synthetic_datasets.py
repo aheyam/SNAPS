@@ -65,10 +65,11 @@ synthetic_datasets = []
 
 # Amino acid probabilities from Shen et al (2006) doi: 10.1016/j.physa.2006.03.004
 aa_list = list("ACDEFGHIKLMNPQRSTVWY")
-aa_prob = [ 0.0777, 0.,157, 0.053, 0.0656, 0.0405,
+aa_prob = [ 0.0777, 0.0157, 0.053, 0.0656, 0.0405,
             0.0691, 0.0227 ,0.0591, 0.0595, 0.096,
             0.0238, 0.0427, 0.0469, 0.0393, 0.0526,
             0.0694, 0.055, 0.0667, 0.0118, 0.0311]
+aa_prob = [x/sum(aa_prob) for x in aa_prob]     # Scale probabilities so they equal 1
 
 for x in range(args.N):
     # Generate the sequence
@@ -104,6 +105,24 @@ for x in range(args.N):
         df.loc[df.Res_type=="G", "CB"] = np.nan
         df.loc[df.Res_type=="G", "CB_pred"] = np.nan
 
+    # Generate i-1 and i+1 shifts
+    df["Res_name_m1"] = df["Res_name"].shift(1)
+    df["Res_name_p1"] = df["Res_name"].shift(-1)
+
+    df_m1 = df[list({"C","CA","CB", "N", "C_pred", "CA_pred", "CB_pred", "N_pred", "Res_type","Res_name", "Res_name_p1"}.
+                    intersection(df.columns))].copy()
+    df_m1.index = df_m1.Res_name_p1   # Note _p1, because we need to transfer the chemical shift to the i+1 residue!
+    df = pd.merge(df, df_m1[["C","CA","CB", "N", "C_pred", "CA_pred", "CB_pred", "N_pred"]], how="left",
+                    left_index=True, right_index=True, suffixes=["", "_m1"])
+    df = df.rename(columns={"C_pred_m1":"C_m1_pred", "CA_pred_m1":"CA_m1_pred", "CB_pred_m1":"CB_m1_pred", "N_pred_m1":"N_m1_pred"})
+
+    df_p1 = df[list({"N", "N_pred", "Res_type","Res_name", "Res_name_m1"}.
+                    intersection(df.columns))].copy()
+    df_p1.index = df_p1.Res_name_m1   # Note _m1, because we need to transfer the chemical shift to the i-1 residue!
+    df = pd.merge(df, df_p1[["N", "N_pred"]], how="left",
+                    left_index=True, right_index=True, suffixes=["", "_p1"])
+    df = df.rename(columns={"N_pred_p1":"N_p1_pred"})
+
     synthetic_datasets += [df.copy()]
 
 #### Output the results
@@ -120,12 +139,12 @@ for i in range(args.N):
         print(sequence, file=fp)
     
     # Print observed data
-    columns = ["Res_name"]+pars["atom_list"]
+    columns = ["Res_name"]+pars["atom_list"]+pars["seq_atom_list"]
     obs_df = synthetic_datasets[i].loc[:, columns]
     obs_df.to_csv(target_dir/"observed_shifts.csv", float_format="%.2f", index=False)
 
     # Print predictions
-    columns = ["Res_N", "Res_type"] + [atom+"_pred" for atom in pars["atom_list"]]
+    columns = ["Res_N", "Res_type"] + [atom+"_pred" for atom in (pars["atom_list"]+pars["seq_atom_list"])]
     preds_df = synthetic_datasets[i].loc[:, columns]
     preds_df.to_csv(target_dir/"predicted_shifts.csv", float_format="%.2f", index=False)
 

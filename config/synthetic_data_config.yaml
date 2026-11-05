@@ -6,6 +6,12 @@ atom_list: # Which atom types to include. Don't change indentation.
     - CA
     - CB
     - C
+seq_atom_list:
+    - CA_m1
+    - CB_m1
+    - C_m1
+    - N_m1
+    - N_p1
 atom_prediction_error: # Standard deviation of prediction error for each atom. Don't change indentation.
     H: 0.454
     N: 2.429
